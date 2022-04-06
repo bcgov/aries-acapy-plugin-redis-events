@@ -1,0 +1,21 @@
+version: "3" 
+services:
+  redis-relay:
+    environment:
+      - REDIS_SERVER=${REDIS_SERVER}
+      - TOPIC_PREFIX=${TOPIC_PREFIX}
+      - STATUS_ENDPOINT_TRANSPORT=${STATUS_ENDPOINT_TRANSPORT}
+      - STATUS_ENDPOINT_API_KEY=${STATUS_ENDPOINT_API_KEY}
+      - TRANSPORT_CONFIG=${TRANSPORT_CONFIG}
+    networks:
+      - delivey_service_network
+    ports:
+      - ${INBOUND_TRANSPORT_PORT_RANGE}:${INBOUND_TRANSPORT_PORT_RANGE}
+      - ${STATUS_ENDPOINT_PORT}:${STATUS_ENDPOINT_PORT}
+    build:
+      context: ..
+      dockerfile: ./relay/Dockerfile
+networks:
+  delivey_service_network:
+    external: true
+    name: ${NETWORK_NAME}

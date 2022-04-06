@@ -12,7 +12,7 @@ from redis.exceptions import RedisError
 from time import time
 from os import getenv
 
-from .status_endpoints import start_status_endpoints_server
+from ..status_endpoints import start_status_endpoints_server
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s: %(message)s",
