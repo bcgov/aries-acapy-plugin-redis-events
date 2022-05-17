@@ -1,18 +1,18 @@
 """Redis Outbound Delivery Service."""
 import aiohttp
 import asyncio
+import base64
 import logging
-import msgpack
 import sys
 import urllib
+import json
 
-from configargparse import ArgumentParser
 from redis.cluster import RedisCluster as Redis
 from redis.exceptions import RedisError
 from time import time
 from os import getenv
 
-from ..status_endpoints import start_status_endpoints_server
+from status_endpoint.status_endpoints import start_status_endpoints_server
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s: %(message)s",
@@ -61,7 +61,7 @@ class Deliverer:
 
     async def process_delivery(self):
         """Process delivery."""
-        http_client = aiohttp.ClientSession(
+        client_session = aiohttp.ClientSession(
             cookie_jar=aiohttp.DummyCookieJar(), trust_env=True
         )
         try:
@@ -79,28 +79,26 @@ class Deliverer:
                 if not msg:
                     await asyncio.sleep(1)
                     continue
-                msg = msgpack.unpackb(msg[1])
+                msg = json.loads(msg[1].decode("utf8"))
                 if not isinstance(msg, dict):
                     logging.error("Received non-dict message")
-                elif b"endpoint" not in msg:
+                elif "endpoint" not in msg:
                     logging.error("No endpoint provided")
-                elif b"payload" not in msg:
+                elif "payload" not in msg:
                     logging.error("No payload provided")
                 else:
                     headers = {}
-                    if b"headers" in msg:
-                        for hname, hval in msg[b"headers"].items():
-                            if isinstance(hval, bytes):
-                                hval = hval.decode("utf-8")
-                            headers[hname.decode("utf-8")] = hval
-                    endpoint = msg[b"endpoint"].decode("utf-8")
-                    payload = msg[b"payload"].decode("utf-8")
+                    if "headers" in msg:
+                        for hname, hval in msg["headers"].items():
+                            headers[hname] = hval
+                    endpoint = msg["endpoint"]
+                    payload = base64.urlsafe_b64decode(msg["payload"])
                     parsed = urllib.parse.urlparse(endpoint)
                     if parsed.scheme == "http" or parsed.scheme == "https":
                         logging.info(f"Dispatch message to {endpoint}")
                         failed = False
                         try:
-                            response = await http_client.post(
+                            response = await client_session.post(
                                 endpoint, data=payload, headers=headers, timeout=10
                             )
                         except aiohttp.ClientError:
@@ -109,17 +107,21 @@ class Deliverer:
                             failed = True
                         else:
                             if response.status < 200 or response.status >= 300:
-                                logging.error("Invalid response code:", response.status)
+                                logging.error(
+                                    f"Invalid response code: {str(response.status)}"
+                                )
                                 failed = True
                         if failed:
                             logging.exception(f"Delivery failed for {endpoint}")
-                            retries = msg.get(b"retries") or 0
+                            retries = msg.get("retries") or 0
                             if retries < 5:
                                 await self.add_retry(
                                     {
                                         "endpoint": endpoint,
                                         "headers": headers,
-                                        "payload": payload,
+                                        "payload": base64.urlsafe_b64encode(
+                                            payload
+                                        ).decode(),
                                         "retries": retries + 1,
                                     }
                                 )
@@ -128,7 +130,7 @@ class Deliverer:
                                     f"Exceeded max retries for {str(endpoint)}"
                                 )
                     elif parsed.scheme == "ws":
-                        async with self.client_session.ws_connect(
+                        async with client_session.ws_connect(
                             endpoint, headers=headers
                         ) as ws:
                             if isinstance(payload, bytes):
@@ -138,7 +140,7 @@ class Deliverer:
                     else:
                         logging.error(f"Unsupported scheme: {parsed.scheme}")
         finally:
-            await http_client.close()
+            await client_session.close()
 
     async def add_retry(self, message: dict):
         """Add undelivered message for future retries."""
@@ -152,7 +154,7 @@ class Deliverer:
                 retry_time = int(time() + wait_interval)
                 self.redis.zadd(
                     f"{self.prefix}.outbound_retry",
-                    {msgpack.packb(message): retry_time},
+                    {str.encode(json.dumps(message), encoding="utf-8"): retry_time},
                 )
                 zadd_sent = True
             except RedisError as err:
@@ -225,28 +227,23 @@ def main(args):
     """Start services."""
     REDIS_SERVER = getenv("REDIS_SERVER")
     TOPIC_PREFIX = getenv("TOPIC_PREFIX", "acapy")
-    STATUS_ENDPOINT_TRANSPORT = getenv("STATUS_ENDPOINT_TRANSPORT")
+    STATUS_ENDPOINT_HOST = getenv("STATUS_ENDPOINT_HOST")
+    STATUS_ENDPOINT_PORT = getenv("STATUS_ENDPOINT_PORT")
     STATUS_ENDPOINT_API_KEY = getenv("STATUS_ENDPOINT_API_KEY")
     if REDIS_SERVER:
         host = REDIS_SERVER
     else:
         raise SystemExit("No Redis host/connection provided.")
     prefix = TOPIC_PREFIX
-    if STATUS_ENDPOINT_TRANSPORT:
-        delivery_Service_endpoint_transport = STATUS_ENDPOINT_TRANSPORT
-    else:
-        raise SystemExit("No Delivery Service api config provided.")
-    if STATUS_ENDPOINT_API_KEY:
-        delivery_Service_api_key = STATUS_ENDPOINT_API_KEY
-    else:
-        raise SystemExit("No Delivery Service api key provided.")
     OUTBOUND_MSG_TOPIC = f"{prefix}-outbound-message"
     OUTBOUND_MSG_RETRY_TOPIC = f"{prefix}-outbound-retry-message"
     HOOKS_TOPIC = f"{prefix}-outbound-webhook"
     HOOKS_RETRY_TOPIC = f"{prefix}-outbound-retry-webhook"
-    api_host, api_port = delivery_Service_endpoint_transport
     msg_handler = MessageDeliverer(
         host, prefix, OUTBOUND_MSG_TOPIC, OUTBOUND_MSG_RETRY_TOPIC
+    )
+    msg_handler.client_session = aiohttp.ClientSession(
+        cookie_jar=aiohttp.DummyCookieJar(), trust_env=True
     )
     logging.info(
         "Starting Redis outbound message delivery agent with args: "
@@ -259,9 +256,13 @@ def main(args):
         f"{host}, {prefix}, {HOOKS_TOPIC}, {HOOKS_RETRY_TOPIC}"
     )
     asyncio.ensure_future(hook_handler.run())
-    start_status_endpoints_server(
-        api_host, api_port, delivery_Service_api_key, [msg_handler, hook_handler]
-    )
+    if STATUS_ENDPOINT_HOST and STATUS_ENDPOINT_PORT and STATUS_ENDPOINT_API_KEY:
+        start_status_endpoints_server(
+            STATUS_ENDPOINT_HOST,
+            STATUS_ENDPOINT_PORT,
+            STATUS_ENDPOINT_API_KEY,
+            [msg_handler, hook_handler],
+        )
 
 
 if __name__ == "__main__":
