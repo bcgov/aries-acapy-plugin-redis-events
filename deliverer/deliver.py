@@ -14,6 +14,8 @@ from os import getenv
 
 from status_endpoint.status_endpoints import start_status_endpoints_server
 
+from . import OutboundPayload
+
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s: %(message)s",
     level=logging.INFO,
@@ -79,66 +81,54 @@ class Deliverer:
                 if not msg:
                     await asyncio.sleep(1)
                     continue
-                msg = json.loads(msg[1].decode("utf8"))
-                if not isinstance(msg, dict):
-                    logging.error("Received non-dict message")
-                elif "endpoint" not in msg:
-                    logging.error("No endpoint provided")
-                elif "payload" not in msg:
-                    logging.error("No payload provided")
-                else:
-                    headers = {}
-                    if "headers" in msg:
-                        for hname, hval in msg["headers"].items():
-                            headers[hname] = hval
-                    endpoint = msg["endpoint"]
-                    payload = base64.urlsafe_b64decode(msg["payload"])
-                    parsed = urllib.parse.urlparse(endpoint)
-                    if parsed.scheme == "http" or parsed.scheme == "https":
-                        logging.info(f"Dispatch message to {endpoint}")
-                        failed = False
-                        try:
-                            response = await client_session.post(
-                                endpoint, data=payload, headers=headers, timeout=10
-                            )
-                        except aiohttp.ClientError:
-                            failed = True
-                        except asyncio.TimeoutError:
-                            failed = True
-                        else:
-                            if response.status < 200 or response.status >= 300:
-                                logging.error(
-                                    f"Invalid response code: {str(response.status)}"
-                                )
-                                failed = True
-                        if failed:
-                            logging.exception(f"Delivery failed for {endpoint}")
-                            retries = msg.get("retries") or 0
-                            if retries < 5:
-                                await self.add_retry(
-                                    {
-                                        "endpoint": endpoint,
-                                        "headers": headers,
-                                        "payload": base64.urlsafe_b64encode(
-                                            payload
-                                        ).decode(),
-                                        "retries": retries + 1,
-                                    }
-                                )
-                            else:
-                                logging.error(
-                                    f"Exceeded max retries for {str(endpoint)}"
-                                )
-                    elif parsed.scheme == "ws":
-                        async with client_session.ws_connect(
-                            endpoint, headers=headers
-                        ) as ws:
-                            if isinstance(payload, bytes):
-                                await ws.send_bytes(payload)
-                            else:
-                                await ws.send_str(payload)
+                msg = OutboundPayload.from_bytes(msg[1])
+                headers = msg.headers
+                for hname, hval in headers.items():
+                    if isinstance(hval, bytes):
+                        hval = hval.decode("utf-8")
+                    headers[hname.decode("utf-8")] = hval
+                endpoint = msg.service.url
+                payload = msg.payload
+                parsed = urllib.parse.urlparse(endpoint)
+                if parsed.scheme == "http" or parsed.scheme == "https":
+                    logging.info(f"Dispatch message to {endpoint}")
+                    failed = False
+                    try:
+                        response = await http_client.post(
+                            endpoint, data=payload, headers=headers, timeout=10
+                        )
+                    except aiohttp.ClientError:
+                        failed = True
+                    except asyncio.TimeoutError:
+                        failed = True
                     else:
-                        logging.error(f"Unsupported scheme: {parsed.scheme}")
+                        if response.status < 200 or response.status >= 300:
+                            logging.error("Invalid response code:", response.status)
+                            failed = True
+                    if failed:
+                        logging.exception(f"Delivery failed for {endpoint}")
+                        retries = msg.get(b"retries") or 0
+                        if retries < 5:
+                            await self.add_retry(
+                                {
+                                    "service": {"url": endpoint},
+                                    "headers": headers,
+                                    "payload": payload,
+                                    "retries": retries + 1,
+                                }
+                            )
+                        else:
+                            logging.error(f"Exceeded max retries for {str(endpoint)}")
+                elif parsed.scheme == "ws":
+                    async with self.client_session.ws_connect(
+                        endpoint, headers=headers
+                    ) as ws:
+                        if isinstance(payload, bytes):
+                            await ws.send_bytes(payload)
+                        else:
+                            await ws.send_str(payload)
+                else:
+                    logging.error(f"Unsupported scheme: {parsed.scheme}")
         finally:
             await client_session.close()
 
@@ -152,9 +142,12 @@ class Deliverer:
                     1 + (self.retry_backoff * (message["retries"] - 1)),
                 )
                 retry_time = int(time() + wait_interval)
+                retry_msg = str.encode(
+                    json.dumps(message),
+                )
                 self.redis.zadd(
                     f"{self.prefix}.outbound_retry",
-                    {str.encode(json.dumps(message), encoding="utf-8"): retry_time},
+                    {retry_msg: retry_time},
                 )
                 zadd_sent = True
             except RedisError as err:

@@ -19,4 +19,3 @@ redis_queue:
       ^acapy::record::([^:]*)::([^:]*)$: acapy-record-with-state-$wallet_id
       ^acapy::record::([^:])?: acapy-record-$wallet_id
       acapy::basicmessage::.*: acapy-basicmessage
-    acapy_event_topic: "acapy-outbound-event"

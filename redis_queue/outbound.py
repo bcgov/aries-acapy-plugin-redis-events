@@ -90,9 +90,7 @@ class RedisOutboundQueue(BaseOutboundTransport):
                 {
                     "service": {"url": endpoint},
                     "payload": base64.urlsafe_b64encode(payload).decode(),
-                    "headers": base64.urlsafe_b64encode(
-                        json.dumps(headers).encode("utf-8")
-                    ).decode(),
+                    "headers": headers,
                 }
             ),
         )
