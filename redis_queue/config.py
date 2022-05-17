@@ -25,7 +25,6 @@ class ConnectionConfig(BaseModel):
 
 class EventsConfig(BaseModel):
     topic_maps: Mapping[str, str]
-    acapy_event_topic: str
     connection: ConnectionConfig
 
     class Config:
@@ -41,7 +40,6 @@ class EventsConfig(BaseModel):
                 "^acapy::record::([^:])?": "acapy-record-$wallet_id",
                 "acapy::basicmessage::received": "acapy-basicmessage-received",
             },
-            acapy_event_topic="acapy-outbound-event",
             connection=ConnectionConfig.default(),
         )
 

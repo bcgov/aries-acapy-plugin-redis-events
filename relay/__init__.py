@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import msgpack
+import base64
 import sys
 import json
 
@@ -10,7 +10,7 @@ from redis.exceptions import RedisError
 from os import getenv
 from uuid import uuid4
 
-from .status_endpoints import start_status_endpoints_server
+from ..status_endpoints import start_status_endpoints_server
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s: %(message)s",
@@ -96,7 +96,7 @@ class WSRelay:
             if not msg:
                 await asyncio.sleep(1)
                 continue
-            msg = msgpack.unpackb(msg[1])
+            msg = json.loads(msg[1].decode("utf8"))
             if not isinstance(msg, dict):
                 logging.error("Received non-dict message")
                 continue
@@ -143,19 +143,21 @@ class WSRelay:
                     txn_id = str(uuid4())
                     if direct_response_request:
                         self.direct_response_txn_request_map[txn_id] = request
-                        message = {
-                            "host": request.host,
-                            "remote": request.remote,
-                            "data": msg.data,
-                            "txn_id": txn_id,
-                            "transport_type": "ws",
-                        }
+                        message = str.encode(
+                            json.dumps(
+                                {
+                                    "payload": base64.urlsafe_b64encode(
+                                        msg.data
+                                    ).decode(),
+                                    "txn_id": txn_id,
+                                    "transport_type": "ws",
+                                }
+                            )
+                        )
                         response_sent = False
                         while not response_sent:
                             try:
-                                self.redis.rpush(
-                                    self.inbound_topic, msgpack.packb(message)
-                                )
+                                self.redis.rpush(self.inbound_topic, message)
                                 response_sent = True
                             except RedisError as err:
                                 await asyncio.sleep(1)
@@ -179,18 +181,20 @@ class WSRelay:
                             pass
                     else:
                         logging.info(f"Message received from {request.remote}")
-                        message = {
-                            "host": request.host,
-                            "remote": request.remote,
-                            "data": msg.data,
-                            "transport_type": "ws",
-                        }
+                        message = str.encode(
+                            json.dumps(
+                                {
+                                    "payload": base64.urlsafe_b64encode(
+                                        msg.data
+                                    ).decode(),
+                                    "transport_type": "ws",
+                                }
+                            )
+                        )
                         msg_sent = False
                         while not msg_sent:
                             try:
-                                self.redis.rpush(
-                                    self.inbound_topic, msgpack.packb(message)
-                                )
+                                self.redis.rpush(self.inbound_topic, message)
                                 msg_sent = True
                             except RedisError as err:
                                 await asyncio.sleep(1)
@@ -298,7 +302,7 @@ class HttpRelay:
             if not msg:
                 await asyncio.sleep(1)
                 continue
-            msg = msgpack.unpackb(msg[1])
+            msg = json.loads(msg[1].decode("utf8"))
             if not isinstance(msg, dict):
                 logging.error("Received non-dict message")
                 continue
@@ -347,17 +351,19 @@ class HttpRelay:
         txn_id = str(uuid4())
         if direct_response_request:
             self.direct_response_txn_request_map[txn_id] = request
-            message = {
-                "host": request.host,
-                "remote": request.remote,
-                "data": body,
-                "txn_id": txn_id,
-                "transport_type": "http",
-            }
+            message = str.encode(
+                json.dumps(
+                    {
+                        "payload": base64.urlsafe_b64encode(body).decode(),
+                        "txn_id": txn_id,
+                        "transport_type": "http",
+                    }
+                )
+            )
             response_sent = False
             while not response_sent:
                 try:
-                    self.redis.rpush(self.inbound_topic, msgpack.packb(message))
+                    self.redis.rpush(self.inbound_topic, message)
                     response_sent = True
                 except RedisError as err:
                     await asyncio.sleep(1)
@@ -385,16 +391,18 @@ class HttpRelay:
                 return web.Response(status=200)
         else:
             logging.info(f"Message received from {request.remote}")
-            message = {
-                "host": request.host,
-                "remote": request.remote,
-                "data": body,
-                "transport_type": "http",
-            }
+            message = str.encode(
+                json.dumps(
+                    {
+                        "payload": base64.urlsafe_b64encode(body).decode(),
+                        "transport_type": "http",
+                    }
+                )
+            )
             msg_sent = False
             while not msg_sent:
                 try:
-                    self.redis.rpush(self.inbound_topic, msgpack.packb(message))
+                    self.redis.rpush(self.inbound_topic, message)
                     msg_sent = True
                 except RedisError as err:
                     await asyncio.sleep(1)

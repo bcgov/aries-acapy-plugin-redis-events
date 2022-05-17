@@ -2,6 +2,7 @@
 
 import json
 import logging
+import base64
 import re
 from string import Template
 from typing import Optional, cast
@@ -39,6 +40,7 @@ async def setup(context: InjectionContext):
 
 RECORD_RE = re.compile(r"acapy::record::([^:]*)(?:::(.*))?")
 WEBHOOK_RE = re.compile(r"acapy::webhook::{.*}")
+DEFAULT_OUTBOUND_TOPIC = "acapy-outbound-message"
 
 
 async def on_startup(profile: Profile, event: Event):
@@ -72,13 +74,22 @@ async def handle_event(profile: Profile, event: EventWithMetadata):
         "category": _derive_category(event.topic),
         "payload": event.payload,
     }
-    config = get_config(profile.settings).events or EventsConfig.default()
+    headers = {"x-wallet-id": wallet_id or "base"}
+    webhook_urls = profile.settings.get("admin.webhook_urls")
     try:
-        template = config.topic_maps[event.metadata.pattern.pattern]
-        topic = Template(template).substitute(**payload)
-        LOGGER.info(f"Sending message {payload} with topic {topic}")        
-        redis.rpush(
-            topic, str.encode(json.dumps(payload)),
-        )
+        for endpoint in webhook_urls:
+            outbound = str.encode(
+                json.dumps(
+                    {
+                        "service": {"url": endpoint},
+                        "payload": base64.urlsafe_b64encode(payload).decode(),
+                        "headers": headers,
+                    }
+                ),
+            )
+            redis.rpush(
+                DEFAULT_OUTBOUND_TOPIC,
+                outbound,
+            )
     except Exception:
         LOGGER.exception("Redis failed to send message")
