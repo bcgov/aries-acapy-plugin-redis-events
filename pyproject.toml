@@ -16,7 +16,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 packages = [
-    { include = "acapy_redis_queue" }
+    { include = "redis_queue" }
 ]
 [tool.poetry.dependencies]
 python = "^3.6.9"
