@@ -41,6 +41,7 @@ class RedisOutboundQueue(BaseOutboundTransport):
     """Redis queue implementation class."""
 
     DEFAULT_OUTBOUND_TOPIC = "acapy-outbound-message"
+    schemes = ("redis", "rediss")
 
     def __init__(self, profile: Profile):
         """Initialize base queue type."""
