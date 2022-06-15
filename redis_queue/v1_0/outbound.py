@@ -44,10 +44,10 @@ class RedisOutboundQueue(BaseOutboundTransport):
     schemes = ("redis", "rediss")
     is_external = True
 
-    def __init__(self, profile: Profile):
+    def __init__(self, root_profile: Profile):
         """Initialize base queue type."""
-        super().__init__(profile)
-        self.config = get_config(profile.settings).outbound or OutboundConfig.default()
+        super().__init__(root_profile)
+        self.config = get_config(root_profile.settings).outbound or OutboundConfig.default()
         LOGGER.info(
             f"Setting up redis outbound queue with configuration: {self.config}"
         )
