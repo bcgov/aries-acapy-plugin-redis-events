@@ -56,7 +56,7 @@ class RedisOutboundQueue(BaseOutboundTransport):
     async def start(self):
         """Start the queue."""
         LOGGER.info("Starting redis outbound queue producer")
-        self.redis = Redis.from_url(**self.config.producer.dict())
+        self.redis = Redis.from_url(url=self.config.connection.connection_url)
 
     async def stop(self):
         """Stop the queue."""
