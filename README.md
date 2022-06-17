@@ -71,6 +71,6 @@ Once the plugin config is filled up. It is possible to deploy the plugin inside 
 $ aca-py start \
     --plugin redis_queue \
     --plugin-config plugins-config.yaml \
-    -it redis_queue.inbound redis 0 -oq redis_queue.outbound.RedisOutboundQueue
+    -it redis_queue.v1_0.inbound redis 0 -oq redis_queue.v1_0.outbound
     # ... the remainder of your startup arguments
 ```
