@@ -41,11 +41,13 @@ class RedisOutboundQueue(BaseOutboundTransport):
     """Redis queue implementation class."""
 
     DEFAULT_OUTBOUND_TOPIC = "acapy-outbound-message"
+    schemes = ("redis", "rediss")
+    is_external = False
 
-    def __init__(self, profile: Profile):
+    def __init__(self, root_profile: Profile):
         """Initialize base queue type."""
-        super().__init__(profile)
-        self.config = get_config(profile.settings).outbound or OutboundConfig.default()
+        super().__init__(root_profile)
+        self.config = get_config(root_profile.context.settings).outbound or OutboundConfig.default()
         LOGGER.info(
             f"Setting up redis outbound queue with configuration: {self.config}"
         )
@@ -54,7 +56,7 @@ class RedisOutboundQueue(BaseOutboundTransport):
     async def start(self):
         """Start the queue."""
         LOGGER.info("Starting redis outbound queue producer")
-        self.redis = Redis.from_url(**self.config.producer.dict())
+        self.redis = Redis.from_url(url=self.config.connection.connection_url)
 
     async def stop(self):
         """Stop the queue."""
