@@ -1,6 +1,7 @@
 """Redis Queue configuration."""
 
 import logging
+from multiprocessing import connection
 from typing import Any, List, Mapping, Optional, Union
 from pydantic import BaseModel, Extra
 
@@ -21,11 +22,10 @@ class ConnectionConfig(BaseModel):
 
     @classmethod
     def default(cls):
-        return cls(connection_url="redis://host.docker.internal:6543")
+        return cls(connection_url="redis://default:test1234@172.28.0.103:6379")
 
 class EventsConfig(BaseModel):
     topic_maps: Mapping[str, str]
-    connection: ConnectionConfig
 
     class Config:
         alias_generator = _alias_generator
@@ -40,14 +40,12 @@ class EventsConfig(BaseModel):
                 "^acapy::record::([^:])?": "acapy-record-$wallet_id",
                 "acapy::basicmessage::received": "acapy-basicmessage-received",
             },
-            connection=ConnectionConfig.default(),
         )
 
 
 class InboundConfig(BaseModel):
     acapy_inbound_topic: str
     acapy_direct_resp_topic: str
-    connection: ConnectionConfig
 
     class Config:
         alias_generator = _alias_generator
@@ -58,27 +56,25 @@ class InboundConfig(BaseModel):
         return cls(
             acapy_inbound_topic="acapy-inbound-message",
             acapy_direct_resp_topic="acapy-inbound-direct-resp",
-            connection=ConnectionConfig.default(),
         )
 
 
 class OutboundConfig(BaseModel):
     acapy_outbound_topic: str
-    acapy_outbound_retry_topic: str
-    connection: ConnectionConfig
+    mediator_mode: bool
 
     @classmethod
     def default(cls):
         return cls(
-            acapy_outbound_topic="acapy-outbound-message",
-            acapy_outbound_retry_topic="acapy-outbound-retry",
-            connection=ConnectionConfig.default(),
+            acapy_outbound_topic="acapy-outbound",
+            mediator_mode=False,
         )
 
 class RedisConfig(BaseModel):
-    event: Optional[EventsConfig]
+    events: Optional[EventsConfig]
     inbound: Optional[InboundConfig]
     outbound: Optional[OutboundConfig]
+    connection: ConnectionConfig
 
     @classmethod
     def default(cls):
@@ -86,17 +82,15 @@ class RedisConfig(BaseModel):
             events=EventsConfig.default(),
             inbound=InboundConfig.default(),
             outbound=OutboundConfig.default(),
+            connection=ConnectionConfig.default(),
         )
 
 
 def process_config_dict(config_dict: dict) -> dict:
     """Add connection to inbound, outbound, events and return updated config."""
-    filter = ["inbound", "event", "outbound"]
-    connection = config_dict["connection"]
-    del config_dict["connection"]
+    filter = ["inbound", "event", "outbound", "connection"]
     for key, value in config_dict.items():
         if key in filter:
-            value["connection"] = connection
             config_dict[key] = value
     return config_dict
 

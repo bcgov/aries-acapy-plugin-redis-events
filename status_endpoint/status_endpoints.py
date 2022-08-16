@@ -37,9 +37,9 @@ def status_ready(api_key: str = Depends(get_api_key)):
 
 
 @router.get("/status/live")
-def status_live(api_key: str = Depends(get_api_key)):
+async def status_live(api_key: str = Depends(get_api_key)):
     """Request handler for liveliness check."""
     for handler in handler_list:
-        if not handler.is_running():
+        if not await (handler.is_running()):
             return {"alive": False}
     return {"alive": True}

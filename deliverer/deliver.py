@@ -7,7 +7,7 @@ import sys
 import urllib
 import json
 
-from redis.cluster import RedisCluster as Redis
+from redis.asyncio import RedisCluster
 from redis.exceptions import RedisError
 from time import time
 from os import getenv
@@ -28,21 +28,20 @@ class Deliverer:
     running = False
     ready = False
 
-    def __init__(self, host: str, prefix: str, topic: str, retry_topic: str):
+    def __init__(self, connection_url: str, topic: str, retry_topic: str):
         """Initialize RedisHandler."""
-        self._host = host
-        self.prefix = prefix
         self.retry_interval = 5
         self.retry_backoff = 0.25
         self.outbound_topic = topic
         self.retry_topic = retry_topic
-        self.redis = Redis.from_url(self._host)
+        self.redis = None
         self.retry_timedelay_s = 1
+        self.connection_url = connection_url
 
     async def run(self):
         """Run the service."""
         try:
-            self.redis.ping()
+            self.redis = RedisCluster.from_url(url=self.connection_url)
             self.ready = True
             self.running = True
             await asyncio.gather(self.process_delivery(), self.process_retries())
@@ -50,10 +49,10 @@ class Deliverer:
             self.ready = False
             self.running = False
 
-    def is_running(self) -> bool:
+    async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
         try:
-            self.redis.ping()
+            await self.redis.ping()
             if self.running:
                 return True
             else:
@@ -63,15 +62,13 @@ class Deliverer:
 
     async def process_delivery(self):
         """Process delivery."""
-        client_session = aiohttp.ClientSession(
-            cookie_jar=aiohttp.DummyCookieJar(), trust_env=True
-        )
+        client_session = None
         try:
             while self.running:
                 msg_received = False
                 while not msg_received:
                     try:
-                        msg = self.redis.blpop(self.outbound_topic, 0.2)
+                        msg = await self.redis.blpop(self.outbound_topic, 0.2)
                         msg_received = True
                     except RedisError as err:
                         await asyncio.sleep(1)
@@ -83,18 +80,20 @@ class Deliverer:
                     continue
                 msg = OutboundPayload.from_bytes(msg[1])
                 headers = msg.headers
-                for hname, hval in headers.items():
-                    if isinstance(hval, bytes):
-                        hval = hval.decode("utf-8")
-                    headers[hname.decode("utf-8")] = hval
                 endpoint = msg.service.url
                 payload = msg.payload
-                parsed = urllib.parse.urlparse(endpoint)
-                if parsed.scheme == "http" or parsed.scheme == "https":
+                endpoint_scheme = msg._endpoint_scheme
+                if endpoint_scheme == "http" or endpoint_scheme == "https":
+                    session_args = {
+                        "cookie_jar": aiohttp.DummyCookieJar(),
+                        "connector": aiohttp.TCPConnector(limit=200, limit_per_host=50),
+                        "trust_env": True,
+                    }
+                    client_session = aiohttp.ClientSession(**session_args)
                     logging.info(f"Dispatch message to {endpoint}")
                     failed = False
                     try:
-                        response = await http_client.post(
+                        response = await client_session.post(
                             endpoint, data=payload, headers=headers, timeout=10
                         )
                     except aiohttp.ClientError:
@@ -103,24 +102,34 @@ class Deliverer:
                         failed = True
                     else:
                         if response.status < 200 or response.status >= 300:
-                            logging.error("Invalid response code:", response.status)
+                            logging.error(
+                                f"Invalid response : {response.status} - "
+                                f"{response.reason}"
+                            )
                             failed = True
                     if failed:
                         logging.exception(f"Delivery failed for {endpoint}")
-                        retries = msg.get(b"retries") or 0
+                        retries = msg.retries or 0
                         if retries < 5:
                             await self.add_retry(
                                 {
                                     "service": {"url": endpoint},
                                     "headers": headers,
-                                    "payload": payload,
+                                    "payload": base64.urlsafe_b64encode(
+                                        payload
+                                    ).decode(),
                                     "retries": retries + 1,
                                 }
                             )
                         else:
                             logging.error(f"Exceeded max retries for {str(endpoint)}")
-                elif parsed.scheme == "ws":
-                    async with self.client_session.ws_connect(
+                elif endpoint_scheme == "ws":
+                    session_args = {
+                        "cookie_jar": aiohttp.DummyCookieJar(),
+                        "trust_env": True,
+                    }
+                    client_session = aiohttp.ClientSession(**session_args)
+                    async with client_session.ws_connect(
                         endpoint, headers=headers
                     ) as ws:
                         if isinstance(payload, bytes):
@@ -128,9 +137,10 @@ class Deliverer:
                         else:
                             await ws.send_str(payload)
                 else:
-                    logging.error(f"Unsupported scheme: {parsed.scheme}")
+                    logging.error(f"Unsupported scheme: {endpoint_scheme}")
         finally:
-            await client_session.close()
+            if client_session:
+                await client_session.close()
 
     async def add_retry(self, message: dict):
         """Add undelivered message for future retries."""
@@ -145,8 +155,8 @@ class Deliverer:
                 retry_msg = str.encode(
                     json.dumps(message),
                 )
-                self.redis.zadd(
-                    f"{self.prefix}.outbound_retry",
+                await self.redis.zadd(
+                    self.retry_topic,
                     {retry_msg: retry_time},
                 )
                 zadd_sent = True
@@ -163,7 +173,7 @@ class Deliverer:
             while not zrangebyscore_rec:
                 max_score = int(time())
                 try:
-                    rows = self.redis.zrangebyscore(
+                    rows = await self.redis.zrangebyscore(
                         name=self.retry_topic,
                         min=0,
                         max=max_score,
@@ -181,7 +191,7 @@ class Deliverer:
                     zrem_rec = False
                     while not zrem_rec:
                         try:
-                            count = self.redis.zrem(
+                            count = await self.redis.zrem(
                                 self.retry_topic,
                                 message,
                             )
@@ -197,7 +207,7 @@ class Deliverer:
                     msg_sent = False
                     while not msg_sent:
                         try:
-                            self.redis.rpush(self.outbound_topic, message)
+                            await self.redis.rpush(self.outbound_topic, message)
                             msg_sent = True
                         except RedisError as err:
                             await asyncio.sleep(1)
@@ -208,55 +218,32 @@ class Deliverer:
                 await asyncio.sleep(self.retry_timedelay_s)
 
 
-class MessageDeliverer(Deliverer):
-    """Outbound Message Http and WS Deliverer."""
-
-
-class HookDeliverer(Deliverer):
-    """ACA-Py Hook Http and WS deliverer."""
-
-
-def main(args):
-    """Start services."""
-    REDIS_SERVER = getenv("REDIS_SERVER")
+def main():
+    """Start Delivery service."""
+    REDIS_SERVER_URL = getenv("REDIS_SERVER_URL")
     TOPIC_PREFIX = getenv("TOPIC_PREFIX", "acapy")
     STATUS_ENDPOINT_HOST = getenv("STATUS_ENDPOINT_HOST")
     STATUS_ENDPOINT_PORT = getenv("STATUS_ENDPOINT_PORT")
     STATUS_ENDPOINT_API_KEY = getenv("STATUS_ENDPOINT_API_KEY")
-    if REDIS_SERVER:
-        host = REDIS_SERVER
-    else:
+    OUTBOUND_TOPIC = f"{TOPIC_PREFIX}-outbound"
+    OUTBOUND_RETRY_TOPIC = f"{TOPIC_PREFIX}-outbound-retry"
+
+    if not REDIS_SERVER_URL:
         raise SystemExit("No Redis host/connection provided.")
-    prefix = TOPIC_PREFIX
-    OUTBOUND_MSG_TOPIC = f"{prefix}-outbound-message"
-    OUTBOUND_MSG_RETRY_TOPIC = f"{prefix}-outbound-retry-message"
-    HOOKS_TOPIC = f"{prefix}-outbound-webhook"
-    HOOKS_RETRY_TOPIC = f"{prefix}-outbound-retry-webhook"
-    msg_handler = MessageDeliverer(
-        host, prefix, OUTBOUND_MSG_TOPIC, OUTBOUND_MSG_RETRY_TOPIC
-    )
-    msg_handler.client_session = aiohttp.ClientSession(
-        cookie_jar=aiohttp.DummyCookieJar(), trust_env=True
-    )
+    handler = Deliverer(REDIS_SERVER_URL, OUTBOUND_TOPIC, OUTBOUND_RETRY_TOPIC)
     logging.info(
         "Starting Redis outbound message delivery agent with args: "
-        f"{host}, {prefix}, {OUTBOUND_MSG_TOPIC}, {OUTBOUND_MSG_RETRY_TOPIC}"
+        f"{REDIS_SERVER_URL}, {TOPIC_PREFIX}, {OUTBOUND_TOPIC}, {OUTBOUND_RETRY_TOPIC}"
     )
-    asyncio.ensure_future(msg_handler.run())
-    hook_handler = HookDeliverer(host, prefix, HOOKS_TOPIC, HOOKS_RETRY_TOPIC)
-    logging.info(
-        "Starting Redis outbound webhook delivery agent with args: "
-        f"{host}, {prefix}, {HOOKS_TOPIC}, {HOOKS_RETRY_TOPIC}"
-    )
-    asyncio.ensure_future(hook_handler.run())
+    asyncio.ensure_future(handler.run())
     if STATUS_ENDPOINT_HOST and STATUS_ENDPOINT_PORT and STATUS_ENDPOINT_API_KEY:
         start_status_endpoints_server(
             STATUS_ENDPOINT_HOST,
             STATUS_ENDPOINT_PORT,
             STATUS_ENDPOINT_API_KEY,
-            [msg_handler, hook_handler],
+            [handler],
         )
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
