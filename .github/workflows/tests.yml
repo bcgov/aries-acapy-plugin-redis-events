@@ -53,7 +53,7 @@ jobs:
           poetry install
     - name: Run unit tests with pytest
       run: |
-        poetry run pytest tests
+        poetry run pytest
 
   int:
     name: Integration Tests
