@@ -14,7 +14,7 @@ env:
 
 jobs:
   test:
-    name: Tests
+    name: Unit Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
