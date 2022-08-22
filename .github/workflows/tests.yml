@@ -53,7 +53,7 @@ jobs:
           poetry install
     - name: Run unit tests with pytest
       run: |
-        poetry run pytest
+        poetry run pytest -ra -q --cov=redis_queue --cov=relay --cov=deliverer --cov-report=term --cov-report=xml
 
   int:
     name: Integration Tests

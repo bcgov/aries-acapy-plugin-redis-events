@@ -49,12 +49,3 @@ testpaths = [
     "deliverer/tests",
     "relay/tests",
 ]
-addopts = [
-    "-ra",
-    "-q",
-    "--cov=redis_queue",
-    "--cov=relay",
-    "--cov=deliverer",
-    "--cov-report=term-missing",
-    "--cov-report=xml",
-]
