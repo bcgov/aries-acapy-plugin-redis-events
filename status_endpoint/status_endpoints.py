@@ -4,7 +4,7 @@ import uvicorn
 from fastapi import Security, Depends, APIRouter, HTTPException
 from fastapi.security.api_key import APIKeyHeader
 
-    
+
 router = APIRouter()
 API_KEY_NAME = "access_token"
 X_API_KEY = APIKeyHeader(name=API_KEY_NAME, auto_error=False)

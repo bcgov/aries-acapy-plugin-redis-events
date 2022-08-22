@@ -334,7 +334,9 @@ class TestRedisHandler(AsyncTestCase):
             "from_url",
             async_mock.MagicMock(),
         ) as mock_redis:
-            Deliverer.running = PropertyMock(side_effect=[True, True, True, True, False])
+            Deliverer.running = PropertyMock(
+                side_effect=[True, True, True, True, False]
+            )
             mock_redis.blpop = async_mock.CoroutineMock(
                 side_effect=[
                     test_module.RedisError,

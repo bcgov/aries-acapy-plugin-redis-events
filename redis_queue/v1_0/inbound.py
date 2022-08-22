@@ -19,7 +19,7 @@ from aries_cloudagent.transport.wire_format import (
 from redis.asyncio import RedisCluster
 from redis.exceptions import RedisError
 
-from utils import (
+from .utils import (
     str_to_datetime,
     curr_datetime_to_str,
     get_timedelta_seconds,
@@ -34,6 +34,8 @@ LOGGER = logging.getLogger(__name__)
 class RedisInboundTransport(BaseInboundTransport):
     """Inbound Transport using Redis."""
 
+    running = True
+
     def __init__(self, host: str, port: int, create_session, **kwargs) -> None:
         """
         Initialize an inbound HTTP transport instance.
@@ -47,7 +49,6 @@ class RedisInboundTransport(BaseInboundTransport):
         super().__init__("redis", create_session, **kwargs)
         self.host = host
         self.port = port
-        self.running = True
         self.inbcound_config = (
             get_config(self.root_profile.context.settings).inbound
             or InboundConfig.default()
@@ -77,8 +78,10 @@ class RedisInboundTransport(BaseInboundTransport):
                 )
                 retry_counter = 0
             except (TypeError, RedisError) as err:
-                if retry_counter >= 5:
-                    print(f"Raise Error {str(err)}, UID: " + plugin_uid.decode())
+                if retry_counter > 5:
+                    LOGGER.exception(
+                        f"Unable to get recip_kys for UID: {plugin_uid.decode()}"
+                    )
                 retry_counter = retry_counter + 1
                 await asyncio.sleep(3)
                 continue
@@ -87,7 +90,9 @@ class RedisInboundTransport(BaseInboundTransport):
                 retry_pop_count = 0
                 while not msg_received:
                     try:
-                        msg_bytes = await self.redis.blpop(self.inbound_topic, 0.2)
+                        msg_bytes = await self.redis.blpop(
+                            f"{self.inbound_topic}_{recip_key}", 0.2
+                        )
                         msg_received = True
                         retry_pop_count = 0
                     except RedisError as err:
@@ -107,6 +112,7 @@ class RedisInboundTransport(BaseInboundTransport):
                     payload = base64.urlsafe_b64decode(inbound["payload"])
                 except (JSONDecodeError, KeyError):
                     LOGGER.exception("Received invalid inbound message record")
+                    continue
                 await self.redis.hset(
                     "uid_last_access_map",
                     plugin_uid,
@@ -150,6 +156,8 @@ class RedisInboundTransport(BaseInboundTransport):
                                         ] = DIDCOMM_V0_MIME_TYPE
                                 else:
                                     response_data["content-type"] = "application/json"
+                                    response = response.encode("utf-8")
+
                             response_data["response"] = base64.urlsafe_b64encode(
                                 response
                             ).decode()
@@ -157,16 +165,15 @@ class RedisInboundTransport(BaseInboundTransport):
                             message["txn_id"] = txn_id
                             message["response_data"] = response_data
                             try:
-                                self.redis.rpush(
+                                await self.redis.rpush(
                                     self.direct_response_topic,
                                     str.encode(json.dumps(message)),
                                 )
                             except RedisError as err:
                                 LOGGER.exception(f"Unexpected exception {str(err)}")
-                except (JSONDecodeError, KeyError):
-                    LOGGER.exception("Received invalid inbound message record")
                 except (MessageParseError, WireFormatParseError):
                     LOGGER.exception("Failed to process message")
+                    continue
 
     async def stop(self):
         pass

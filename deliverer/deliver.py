@@ -225,8 +225,8 @@ def main():
     STATUS_ENDPOINT_HOST = getenv("STATUS_ENDPOINT_HOST")
     STATUS_ENDPOINT_PORT = getenv("STATUS_ENDPOINT_PORT")
     STATUS_ENDPOINT_API_KEY = getenv("STATUS_ENDPOINT_API_KEY")
-    OUTBOUND_TOPIC = f"{TOPIC_PREFIX}-outbound"
-    OUTBOUND_RETRY_TOPIC = f"{TOPIC_PREFIX}-outbound-retry"
+    OUTBOUND_TOPIC = f"{TOPIC_PREFIX}_outbound"
+    OUTBOUND_RETRY_TOPIC = f"{TOPIC_PREFIX}_outbound-retry"
 
     if not REDIS_SERVER_URL:
         raise SystemExit("No Redis host/connection provided.")

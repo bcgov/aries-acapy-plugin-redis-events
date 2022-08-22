@@ -1,295 +1,276 @@
+import asyncio
+import base64
 import pytest
-import redis
+import json
 import os
 import string
 
+from aries_cloudagent.core.in_memory import InMemoryProfile
+from aries_cloudagent.config.injection_context import InjectionContext
+from aries_cloudagent.transport.inbound.session import InboundSession
+from aries_cloudagent.transport.inbound.message import InboundMessage
+from aries_cloudagent.messaging.error import MessageParseError
+from aiohttp.test_utils import unused_port
 from asynctest import TestCase as AsyncTestCase, mock as async_mock, PropertyMock
-
-from .....config.settings import Settings
-from .....core.in_memory.profile import InMemoryProfile
-
-from ...manager import InboundTransportManager
-
-from .. import redis as test_module
-from ..base import InboundQueueConfigurationError, InboundQueueError
-from ..redis import RedisInboundQueue
+from redis.asyncio import RedisCluster
+from redis.exceptions import RedisError
 
 
-ENDPOINT = "http://localhost:9000"
-KEYNAME = "acapy.redis_inbound_transport"
+from .. import inbound as test_inbound
+from ..inbound import RedisInboundTransport
 
-REDIS_CONF = os.environ.get("TEST_REDIS_CONFIG", None)
-
-
-test_msg_a = (
-    None,
-    msgpack.packb(
-        {
-            "host": "test1",
-            "remote": "http://localhost:9000",
-            "data": (string.digits + string.ascii_letters),
-            "transport_type": "ws",
+SETTINGS = {
+    "plugin_config": {
+        "redis_queue": {
+            "connection": {"connection_url": "test"},
+            "inbound": {
+                "acapy_inbound_topic": "acapy_inbound",
+                "acapy_direct_resp_topic": "acapy_inbound_direct_resp",
+            },
+            "outbound": {
+                "acapy_outbound_topic": "acapy_outbound",
+                "mediator_mode": False,
+            },
         }
-    ),
-)
-test_msg_b = (
-    None,
-    msgpack.packb(
+    }
+}
+
+TEST_INBOUND_MSG_DIRECT_RESPONSE = str.encode(
+    json.dumps(
         {
-            "host": "test2",
-            "remote": "http://localhost:9000",
-            "data": (string.digits + string.ascii_letters),
-            "txn_id": "test123",
+            "payload": "eyJwcm90ZWN0ZWQiOiAiZXlKbGJtTWlPaUFpZUdOb1lXTm9ZVEl3Y0c5c2VURXpNRFZmYVdWMFppSXNJQ0owZVhBaU9pQWlTbGROTHpFdU1DSXNJQ0poYkdjaU9pQWlRWFYwYUdOeWVYQjBJaXdnSW5KbFkybHdhV1Z1ZEhNaU9pQmJleUpsYm1OeWVYQjBaV1JmYTJWNUlqb2dJakZqWjNsMFFtMTNNM0V4YUdkaVZ6Qkpiak50U0c4MldXaExUMnRwUnpWRWVUaHJSakpJV2pZeGNUSnZXV00zYm10dVN6bE9TVWMyU0VobFUyTm9lV0VpTENBaWFHVmhaR1Z5SWpvZ2V5SnJhV1FpT2lBaU5FUkNTalJhY0RnMU1XZHFlazUwU20xdGIwVTVOMWR4Vm5KWFRqTTJlVnBTWVVkcFpqUkJSM0o0ZDFFaUxDQWljMlZ1WkdWeUlqb2dJak5XY0hsU2NVRlpUV3N5Tms1RmMwUXpObU5mWjJnMFZIazBaamd3TUd4RFJHRXdNMWxsUlc1bVJYQm1WMmhKTFdkelpFY3RWR1JrTVdWTmFEbFpTWG8zTkhSRlN6SnNSMVZhVFhwZk5HdDFkMEpUVWtvMFRGOWhkMVJLUVZWVmQydFRWbmhyTXpSblVWVmZOV2RyZDFSa09FWTFUa0ZsU1U1UVZTSXNJQ0pwZGlJNklDSnFWVkpDUW1OaVQzZzNOa05zVmw4eGF6aFJNMjlyVW5KdFJHUTFhM0JwUWlKOWZWMTkiLCAiaXYiOiAiTVdnR3VRNF9ab2dxVVJUbiIsICJjaXBoZXJ0ZXh0IjogIlVNTGFQOU13ZF9wOFR1bWdwcVZWQWZTSWZXc1g3a0lWLUR4RndfVHRTQ2pWdTVTbG5RYmtkTVJLd3VyZGI1dmd6Q0tUNUFybFV0WEFMMm1sSUlpUGpSYzVmSzhLc013S0dFemkycEtrdmxDN1EzUXRKWTE5WmVTSjlYMGlUOWxOamNEM25KS0o1bzlkSjhVWGZpNU80ZEtaLWxlVy1qOHlzTEFTSTh1eEZYVVNoUmxlNy03bm5HZkZnRlZBRjNaWVpqNlRXUUJrdkdSUk96TzMwTHNEWHBzalNqMWZfd056RWdxTmpPMERZemRKa0lBNm1BQ1AiLCAidGFnIjogImVBZVFiakktVmpkN21hcWdTNElGTlEifQ==",
+            "txn_id": "test1234",
             "transport_type": "http",
         }
-    ),
+    )
 )
-test_msg_c = (
-    None,
-    msgpack.packb(
+
+TEST_INBOUND_MSG_A = str.encode(
+    json.dumps(
         {
-            "host": "test2",
-            "remote": "http://localhost:9000",
-            "data": (string.digits + string.ascii_letters),
-            "txn_id": "test123",
+            "payload": "eyJwcm90ZWN0ZWQiOiAiZXlKbGJtTWlPaUFpZUdOb1lXTm9ZVEl3Y0c5c2VURXpNRFZmYVdWMFppSXNJQ0owZVhBaU9pQWlTbGROTHpFdU1DSXNJQ0poYkdjaU9pQWlRWFYwYUdOeWVYQjBJaXdnSW5KbFkybHdhV1Z1ZEhNaU9pQmJleUpsYm1OeWVYQjBaV1JmYTJWNUlqb2dJakZqWjNsMFFtMTNNM0V4YUdkaVZ6Qkpiak50U0c4MldXaExUMnRwUnpWRWVUaHJSakpJV2pZeGNUSnZXV00zYm10dVN6bE9TVWMyU0VobFUyTm9lV0VpTENBaWFHVmhaR1Z5SWpvZ2V5SnJhV1FpT2lBaU5FUkNTalJhY0RnMU1XZHFlazUwU20xdGIwVTVOMWR4Vm5KWFRqTTJlVnBTWVVkcFpqUkJSM0o0ZDFFaUxDQWljMlZ1WkdWeUlqb2dJak5XY0hsU2NVRlpUV3N5Tms1RmMwUXpObU5mWjJnMFZIazBaamd3TUd4RFJHRXdNMWxsUlc1bVJYQm1WMmhKTFdkelpFY3RWR1JrTVdWTmFEbFpTWG8zTkhSRlN6SnNSMVZhVFhwZk5HdDFkMEpUVWtvMFRGOWhkMVJLUVZWVmQydFRWbmhyTXpSblVWVmZOV2RyZDFSa09FWTFUa0ZsU1U1UVZTSXNJQ0pwZGlJNklDSnFWVkpDUW1OaVQzZzNOa05zVmw4eGF6aFJNMjlyVW5KdFJHUTFhM0JwUWlKOWZWMTkiLCAiaXYiOiAiTVdnR3VRNF9ab2dxVVJUbiIsICJjaXBoZXJ0ZXh0IjogIlVNTGFQOU13ZF9wOFR1bWdwcVZWQWZTSWZXc1g3a0lWLUR4RndfVHRTQ2pWdTVTbG5RYmtkTVJLd3VyZGI1dmd6Q0tUNUFybFV0WEFMMm1sSUlpUGpSYzVmSzhLc013S0dFemkycEtrdmxDN1EzUXRKWTE5WmVTSjlYMGlUOWxOamNEM25KS0o1bzlkSjhVWGZpNU80ZEtaLWxlVy1qOHlzTEFTSTh1eEZYVVNoUmxlNy03bm5HZkZnRlZBRjNaWVpqNlRXUUJrdkdSUk96TzMwTHNEWHBzalNqMWZfd056RWdxTmpPMERZemRKa0lBNm1BQ1AiLCAidGFnIjogImVBZVFiakktVmpkN21hcWdTNElGTlEifQ==",
+        }
+    )
+)
+
+TEST_INBOUND_MSG_B = str.encode(
+    json.dumps(
+        {
+            "payload": "eyJwcm90ZWN0ZWQiOiAiZXlKbGJtTWlPaUFpZUdOb1lXTm9ZVEl3Y0c5c2VURXpNRFZmYVdWMFppSXNJQ0owZVhBaU9pQWlTbGROTHpFdU1DSXNJQ0poYkdjaU9pQWlRWFYwYUdOeWVYQjBJaXdnSW5KbFkybHdhV1Z1ZEhNaU9pQmJleUpsYm1OeWVYQjBaV1JmYTJWNUlqb2dJakZqWjNsMFFtMTNNM0V4YUdkaVZ6Qkpiak50U0c4MldXaExUMnRwUnpWRWVUaHJSakpJV2pZeGNUSnZXV00zYm10dVN6bE9TVWMyU0VobFUyTm9lV0VpTENBaWFHVmhaR1Z5SWpvZ2V5SnJhV1FpT2lBaU5FUkNTalJhY0RnMU1XZHFlazUwU20xdGIwVTVOMWR4Vm5KWFRqTTJlVnBTWVVkcFpqUkJSM0o0ZDFFaUxDQWljMlZ1WkdWeUlqb2dJak5XY0hsU2NVRlpUV3N5Tms1RmMwUXpObU5mWjJnMFZIazBaamd3TUd4RFJHRXdNMWxsUlc1bVJYQm1WMmhKTFdkelpFY3RWR1JrTVdWTmFEbFpTWG8zTkhSRlN6SnNSMVZhVFhwZk5HdDFkMEpUVWtvMFRGOWhkMVJLUVZWVmQydFRWbmhyTXpSblVWVmZOV2RyZDFSa09FWTFUa0ZsU1U1UVZTSXNJQ0pwZGlJNklDSnFWVkpDUW1OaVQzZzNOa05zVmw4eGF6aFJNMjlyVW5KdFJHUTFhM0JwUWlKOWZWMTkiLCAiaXYiOiAiTVdnR3VRNF9ab2dxVVJUbiIsICJjaXBoZXJ0ZXh0IjogIlVNTGFQOU13ZF9wOFR1bWdwcVZWQWZTSWZXc1g3a0lWLUR4RndfVHRTQ2pWdTVTbG5RYmtkTVJLd3VyZGI1dmd6Q0tUNUFybFV0WEFMMm1sSUlpUGpSYzVmSzhLc013S0dFemkycEtrdmxDN1EzUXRKWTE5WmVTSjlYMGlUOWxOamNEM25KS0o1bzlkSjhVWGZpNU80ZEtaLWxlVy1qOHlzTEFTSTh1eEZYVVNoUmxlNy03bm5HZkZnRlZBRjNaWVpqNlRXUUJrdkdSUk96TzMwTHNEWHBzalNqMWZfd056RWdxTmpPMERZemRKa0lBNm1BQ1AiLCAidGFnIjogImVBZVFiakktVmpkN21hcWdTNElGTlEifQ==",
+            "transport_type": "http",
+        }
+    )
+)
+
+TEST_INBOUND_MSG_C = str.encode(
+    json.dumps(
+        {
+            "payload": "eyJwcm90ZWN0ZWQiOiAiZXlKbGJtTWlPaUFpZUdOb1lXTm9ZVEl3Y0c5c2VURXpNRFZmYVdWMFppSXNJQ0owZVhBaU9pQWlTbGROTHpFdU1DSXNJQ0poYkdjaU9pQWlRWFYwYUdOeWVYQjBJaXdnSW5KbFkybHdhV1Z1ZEhNaU9pQmJleUpsYm1OeWVYQjBaV1JmYTJWNUlqb2dJakZqWjNsMFFtMTNNM0V4YUdkaVZ6Qkpiak50U0c4MldXaExUMnRwUnpWRWVUaHJSakpJV2pZeGNUSnZXV00zYm10dVN6bE9TVWMyU0VobFUyTm9lV0VpTENBaWFHVmhaR1Z5SWpvZ2V5SnJhV1FpT2lBaU5FUkNTalJhY0RnMU1XZHFlazUwU20xdGIwVTVOMWR4Vm5KWFRqTTJlVnBTWVVkcFpqUkJSM0o0ZDFFaUxDQWljMlZ1WkdWeUlqb2dJak5XY0hsU2NVRlpUV3N5Tms1RmMwUXpObU5mWjJnMFZIazBaamd3TUd4RFJHRXdNMWxsUlc1bVJYQm1WMmhKTFdkelpFY3RWR1JrTVdWTmFEbFpTWG8zTkhSRlN6SnNSMVZhVFhwZk5HdDFkMEpUVWtvMFRGOWhkMVJLUVZWVmQydFRWbmhyTXpSblVWVmZOV2RyZDFSa09FWTFUa0ZsU1U1UVZTSXNJQ0pwZGlJNklDSnFWVkpDUW1OaVQzZzNOa05zVmw4eGF6aFJNMjlyVW5KdFJHUTFhM0JwUWlKOWZWMTkiLCAiaXYiOiAiTVdnR3VRNF9ab2dxVVJUbiIsICJjaXBoZXJ0ZXh0IjogIlVNTGFQOU13ZF9wOFR1bWdwcVZWQWZTSWZXc1g3a0lWLUR4RndfVHRTQ2pWdTVTbG5RYmtkTVJLd3VyZGI1dmd6Q0tUNUFybFV0WEFMMm1sSUlpUGpSYzVmSzhLc013S0dFemkycEtrdmxDN1EzUXRKWTE5WmVTSjlYMGlUOWxOamNEM25KS0o1bzlkSjhVWGZpNU80ZEtaLWxlVy1qOHlzTEFTSTh1eEZYVVNoUmxlNy03bm5HZkZnRlZBRjNaWVpqNlRXUUJrdkdSUk96TzMwTHNEWHBzalNqMWZfd056RWdxTmpPMERZemRKa0lBNm1BQ1AiLCAidGFnIjogImVBZVFiakktVmpkN21hcWdTNElGTlEifQ==",
             "transport_type": "ws",
         }
-    ),
+    )
 )
-test_msg_d = (
-    None,
-    msgpack.packb(
-        """{
-        "host": "test2",
-        "remote": "http://localhost:9000",
-        "data": (string.digits + string.ascii_letters),
-        "txn_id": "test123",
-        "transport_type": "http",
-    }""".encode(
-            "utf-8"
-        )
-    ),
-)
+
+TEST_INBOUND_INVALID = b"""{
+    "payload" "==",
+    "transport_type": "ws",
+}"""
 
 
 class TestRedisInbound(AsyncTestCase):
     def setUp(self):
-        self.session = InMemoryProfile.test_session()
-        self.profile = self.session.profile
-        self.context = self.profile.context
-
-    def test_sanitize_connection_url(self):
-        self.profile.settings[
-            "transport.inbound_queue"
-        ] = "redis://username:password@localhost:6379/0"
-        queue = RedisInboundQueue(self.profile)
-        assert queue.sanitize_connection_url() == "redis://localhost:6379/0"
-        self.profile.settings[
-            "transport.inbound_queue"
-        ] = "rediss://username:password@localhost:6379/0"
-        queue = RedisInboundQueue(self.profile)
-        assert queue.sanitize_connection_url() == "rediss://localhost:6379/0"
-        self.profile.settings["transport.inbound_queue"] = "redis://localhost:6379"
-        queue = RedisInboundQueue(self.profile)
-        assert queue.sanitize_connection_url() == "redis://localhost:6379"
+        self.port = unused_port()
+        self.session = None
+        self.profile = InMemoryProfile.test_profile()
 
     async def test_init(self):
-        self.profile.settings["transport.inbound_queue"] = "connection"
-        self.profile.settings["transport.inbound_queue_transports"] = [
-            ("http", "0.0.0.0", "8002"),
-            ("ws", "0.0.0.0", "8003"),
-        ]
+        self.profile.context.injector.bind_instance(
+            RedisCluster, async_mock.MagicMock()
+        )
+        RedisInboundTransport.running = PropertyMock(
+            side_effect=[True, True, True, False]
+        )
+        redis_inbound_inst = RedisInboundTransport(
+            "0.0.0.0",
+            self.port,
+            async_mock.CoroutineMock(
+                return_value=async_mock.MagicMock(
+                    receive=async_mock.CoroutineMock(),
+                    wait_response=async_mock.CoroutineMock(
+                        side_effect=[
+                            b"test_response_1",
+                            "test_response_2",
+                            MessageParseError,
+                        ]
+                    ),
+                    profile=async_mock.MagicMock(
+                        settings={"emit_new_didcomm_mime_type": True}
+                    ),
+                )
+            ),
+            root_profile=self.profile,
+        )
+
+        assert redis_inbound_inst
+
+    async def test_start(self):
+        self.profile.settings["emit_new_didcomm_mime_type"] = False
+        self.profile.context.injector.bind_instance(
+            RedisCluster,
+            async_mock.MagicMock(
+                hset=async_mock.CoroutineMock(),
+                hget=async_mock.CoroutineMock(
+                    side_effect=[
+                        base64.urlsafe_b64encode(
+                            json.dumps(
+                                [
+                                    "test_recip_key_1",
+                                    "test_recip_key_2",
+                                    "test_recip_key_3",
+                                    "test_recip_key_5",
+                                ]
+                            ).encode("utf-8")
+                        ).decode(),
+                        b"1",
+                        b"2",
+                        b"1",
+                        base64.urlsafe_b64encode(
+                            json.dumps(
+                                [
+                                    "test_recip_key_1",
+                                    "test_recip_key_2",
+                                    "test_recip_key_4",
+                                    "test_recip_key_3",
+                                    "test_recip_key_5",
+                                ]
+                            ).encode("utf-8")
+                        ).decode(),
+                        b"1",
+                        b"1",
+                        b"2",
+                        b"3",
+                        None,
+                    ]
+                ),
+                blpop=async_mock.CoroutineMock(
+                    side_effect=[
+                        (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
+                        (None, TEST_INBOUND_MSG_A),
+                        (None, TEST_INBOUND_MSG_B),
+                        (None, TEST_INBOUND_INVALID),
+                        (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
+                        None,
+                        (None, TEST_INBOUND_MSG_B),
+                        (None, TEST_INBOUND_MSG_C),
+                        (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
+                    ]
+                ),
+                rpush=async_mock.CoroutineMock(side_effect=[RedisError, None]),
+            ),
+        )
         with async_mock.patch.object(
-            redis.cluster.RedisCluster,
-            "from_url",
-            async_mock.MagicMock(),
+            test_inbound.asyncio, "sleep", async_mock.CoroutineMock()
         ):
-            queue = RedisInboundQueue(self.profile)
-            queue.prefix == "acapy"
-            queue.connection = "connection"
-            assert str(queue)
-            await queue.start_queue()
-
-    def test_init_x(self):
-        with pytest.raises(InboundQueueConfigurationError):
-            RedisInboundQueue(self.profile)
-
-    async def test_receive_message(self):
-        self.profile.settings["transport.inbound_queue"] = "connection"
-        mock_inbound_mgr = async_mock.MagicMock(
-            create_session=async_mock.CoroutineMock(
-                return_value=async_mock.MagicMock(
-                    receive=async_mock.CoroutineMock(),
-                    profile=self.profile,
+            RedisInboundTransport.running = PropertyMock(
+                side_effect=[
+                    True,
+                    True,
+                    True,
+                    False,
+                ]
+            )
+            redis_inbound_inst = RedisInboundTransport(
+                "0.0.0.0",
+                self.port,
+                async_mock.CoroutineMock(
+                    return_value=async_mock.MagicMock(
+                        receive=async_mock.CoroutineMock(),
+                        wait_response=async_mock.CoroutineMock(
+                            side_effect=[
+                                b"test_response_1",
+                                "test_response_2",
+                                MessageParseError,
+                            ]
+                        ),
+                        profile=self.profile,
+                    )
                 ),
-            ),
-        )
-        with async_mock.patch.object(
-            redis.cluster.RedisCluster,
-            "from_url",
-            async_mock.MagicMock(
-                return_value=async_mock.MagicMock(
-                    blpop=async_mock.MagicMock(side_effect=[test_msg_a, test_msg_a]),
-                    rpush=async_mock.MagicMock(),
-                )
-            ),
-        ) as mock_redis:
-            self.context.injector.bind_instance(
-                InboundTransportManager, mock_inbound_mgr
+                root_profile=self.profile,
             )
-            sentinel = PropertyMock(side_effect=[True, True, False])
-            RedisInboundQueue.RUNNING = sentinel
-            queue = RedisInboundQueue(self.profile)
-            queue.redis = mock_redis
-            await queue.start_queue()
-            await queue.receive_messages()
-        assert mock_redis.return_value.blpop.call_count == 2
-        assert mock_redis.return_value.rpush.call_count == 0
 
-    async def test_receive_message_x(self):
-        self.profile.settings["transport.inbound_queue"] = "connection"
-        mock_inbound_mgr = async_mock.MagicMock(
-            create_session=async_mock.CoroutineMock(
-                return_value=async_mock.MagicMock(
-                    receive=async_mock.CoroutineMock(),
-                    profile=self.profile,
-                ),
-            ),
-        )
-        with async_mock.patch.object(
-            redis.cluster.RedisCluster,
-            "from_url",
-            async_mock.MagicMock(
-                return_value=async_mock.MagicMock(
-                    blpop=async_mock.MagicMock(side_effect=test_module.RedisError),
-                    rpush=async_mock.MagicMock(),
-                )
-            ),
-        ) as mock_redis, async_mock.patch.object(
-            test_module.asyncio, "sleep", async_mock.CoroutineMock()
-        ) as mock_sleep:
-            self.context.injector.bind_instance(
-                InboundTransportManager, mock_inbound_mgr
-            )
-            sentinel = PropertyMock(side_effect=[True, False])
-            RedisInboundQueue.RUNNING = sentinel
-            queue = RedisInboundQueue(self.profile)
-            queue.redis = mock_redis
-            await queue.start_queue()
-            with self.assertRaises(InboundQueueError):
-                await queue.receive_messages()
+            await redis_inbound_inst.start()
+            await redis_inbound_inst.stop()
 
-    async def test_receive_message_direct_response_a(self):
-        self.profile.settings["plugin_config"] = {
-            "redis_inbound_queue": {
-                "connection": "connection",
-                "prefix": "acapy",
-            }
-        }
-        mock_inbound_mgr = async_mock.MagicMock(
-            create_session=async_mock.CoroutineMock(
-                return_value=async_mock.MagicMock(
-                    receive=async_mock.CoroutineMock(),
-                    wait_response=async_mock.CoroutineMock(
-                        side_effect=[b"test_response", "response", "response"]
-                    ),
-                    profile=self.profile,
-                )
-            ),
-        )
-        with async_mock.patch.object(
-            redis.cluster.RedisCluster,
-            "from_url",
-            async_mock.MagicMock(
-                return_value=async_mock.MagicMock(
-                    blpop=async_mock.MagicMock(
-                        side_effect=[test_msg_b, test_msg_b, test_msg_c]
-                    ),
-                    rpush=async_mock.MagicMock(),
-                )
-            ),
-        ) as mock_redis:
-            self.context.injector.bind_instance(
-                InboundTransportManager, mock_inbound_mgr
-            )
-            sentinel = PropertyMock(side_effect=[True, True, True, False])
-            RedisInboundQueue.RUNNING = sentinel
-            queue = RedisInboundQueue(self.profile)
-            queue.redis = mock_redis
-            await queue.start_queue()
-            await queue.receive_messages()
-        assert mock_redis.return_value.blpop.call_count == 3
-        assert mock_redis.return_value.rpush.call_count == 3
-
-    async def test_receive_message_direct_response_b(self):
-        self.profile.settings["transport.inbound_queue"] = "connection"
+    async def test_start_x(self):
         self.profile.settings["emit_new_didcomm_mime_type"] = True
-        mock_inbound_mgr = async_mock.MagicMock(
-            create_session=async_mock.CoroutineMock(
-                return_value=async_mock.MagicMock(
-                    receive=async_mock.CoroutineMock(),
-                    wait_response=async_mock.CoroutineMock(
-                        side_effect=[b"test_response"]
-                    ),
-                    profile=self.profile,
-                )
+        self.profile.context.injector.bind_instance(
+            RedisCluster,
+            async_mock.MagicMock(
+                hset=async_mock.CoroutineMock(),
+                hget=async_mock.CoroutineMock(
+                    side_effect=[
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                        base64.urlsafe_b64encode(
+                            json.dumps(
+                                [
+                                    "test_recip_key_1",
+                                    "test_recip_key_2",
+                                ]
+                            ).encode("utf-8")
+                        ).decode(),
+                        b"1",
+                    ]
+                ),
+                blpop=async_mock.CoroutineMock(
+                    side_effect=[
+                        (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                        RedisError,
+                    ]
+                ),
+                rpush=async_mock.CoroutineMock(),
             ),
         )
         with async_mock.patch.object(
-            redis.cluster.RedisCluster,
-            "from_url",
-            async_mock.MagicMock(
-                return_value=async_mock.MagicMock(
-                    blpop=async_mock.MagicMock(side_effect=[test_msg_b, test_msg_d]),
-                    rpush=async_mock.MagicMock(),
-                )
-            ),
-        ) as mock_redis:
-            self.context.injector.bind_instance(
-                InboundTransportManager, mock_inbound_mgr
+            test_inbound.asyncio, "sleep", async_mock.CoroutineMock()
+        ):
+            RedisInboundTransport.running = PropertyMock(
+                side_effect=[
+                    True,
+                    True,
+                    True,
+                    True,
+                    True,
+                    True,
+                    True,
+                    False,
+                ]
             )
-            sentinel = PropertyMock(side_effect=[True, True, False])
-            RedisInboundQueue.RUNNING = sentinel
-            queue = RedisInboundQueue(self.profile)
-            queue.redis = mock_redis
-            await queue.start_queue()
-            await queue.receive_messages()
-
-    async def test_receive_message_direct_response_x(self):
-        self.profile.settings["plugin_config"] = {
-            "redis_inbound_queue": {
-                "connection": "connection",
-                "prefix": "acapy",
-            }
-        }
-        mock_inbound_mgr = async_mock.MagicMock(
-            create_session=async_mock.CoroutineMock(
-                return_value=async_mock.MagicMock(
-                    receive=async_mock.CoroutineMock(),
-                    wait_response=async_mock.CoroutineMock(
-                        side_effect=[b"test_response"]
-                    ),
-                    profile=self.profile,
-                )
-            ),
-        )
-        with async_mock.patch.object(
-            redis.cluster.RedisCluster,
-            "from_url",
-            async_mock.MagicMock(
-                return_value=async_mock.MagicMock(
-                    blpop=async_mock.MagicMock(side_effect=[test_msg_b]),
-                    rpush=async_mock.MagicMock(side_effect=[test_module.RedisError]),
-                )
-            ),
-        ) as mock_redis:
-            self.context.injector.bind_instance(
-                InboundTransportManager, mock_inbound_mgr
+            redis_inbound_inst = RedisInboundTransport(
+                "0.0.0.0",
+                self.port,
+                async_mock.CoroutineMock(
+                    return_value=async_mock.MagicMock(
+                        receive=async_mock.CoroutineMock(),
+                        wait_response=async_mock.CoroutineMock(
+                            side_effect=[
+                                b"test_response_1",
+                            ]
+                        ),
+                        profile=self.profile,
+                    )
+                ),
+                root_profile=self.profile,
             )
-            sentinel = PropertyMock(side_effect=[True, False])
-            RedisInboundQueue.RUNNING = sentinel
-            queue = RedisInboundQueue(self.profile)
-            queue.redis = mock_redis
-            await queue.start_queue()
-            with self.assertRaises(InboundQueueError):
-                await queue.receive_messages()
+            with self.assertRaises(test_inbound.InboundTransportError):
+                await redis_inbound_inst.start()
+                await redis_inbound_inst.stop()

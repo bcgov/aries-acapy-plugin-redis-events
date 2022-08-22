@@ -24,7 +24,8 @@ class ConnectionConfig(BaseModel):
     def default(cls):
         return cls(connection_url="redis://default:test1234@172.28.0.103:6379")
 
-class EventsConfig(BaseModel):
+
+class EventConfig(BaseModel):
     topic_maps: Mapping[str, str]
 
     class Config:
@@ -39,6 +40,16 @@ class EventsConfig(BaseModel):
                 "^acapy::record::([^:]*)::([^:]*)$": "acapy-record-with-state-$wallet_id",
                 "^acapy::record::([^:])?": "acapy-record-$wallet_id",
                 "acapy::basicmessage::received": "acapy-basicmessage-received",
+                "acapy::problem_report": "acapy-problem_report",
+                "acapy::ping::received": "acapy-ping-received",
+                "acapy::ping::response_received": "acapy-ping-response_received",
+                "acapy::actionmenu::received": "acapy-actionmenu-received",
+                "acapy::actionmenu::get-active-menu": "acapy-actionmenu-get-active-menu",
+                "acapy::actionmenu::perform-menu-action": "acapy-actionmenu-perform-menu-action",
+                "acapy::keylist::updated": "acapy-keylist-updated",
+                "acapy::revocation-notification::received": "acapy-revocation-notification-received",
+                "acapy::revocation-notification-v2::received": "acapy-revocation-notification-v2-received",
+                "acapy::forward::received": "acapy-forward-received",
             },
         )
 
@@ -54,8 +65,8 @@ class InboundConfig(BaseModel):
     @classmethod
     def default(cls):
         return cls(
-            acapy_inbound_topic="acapy-inbound-message",
-            acapy_direct_resp_topic="acapy-inbound-direct-resp",
+            acapy_inbound_topic="acapy_inbound",
+            acapy_direct_resp_topic="acapy_inbound_direct_resp",
         )
 
 
@@ -66,12 +77,13 @@ class OutboundConfig(BaseModel):
     @classmethod
     def default(cls):
         return cls(
-            acapy_outbound_topic="acapy-outbound",
+            acapy_outbound_topic="acapy_outbound",
             mediator_mode=False,
         )
 
+
 class RedisConfig(BaseModel):
-    events: Optional[EventsConfig]
+    event: Optional[EventConfig]
     inbound: Optional[InboundConfig]
     outbound: Optional[OutboundConfig]
     connection: ConnectionConfig
@@ -79,7 +91,7 @@ class RedisConfig(BaseModel):
     @classmethod
     def default(cls):
         return cls(
-            events=EventsConfig.default(),
+            event=EventConfig.default(),
             inbound=InboundConfig.default(),
             outbound=OutboundConfig.default(),
             connection=ConnectionConfig.default(),
@@ -87,7 +99,7 @@ class RedisConfig(BaseModel):
 
 
 def process_config_dict(config_dict: dict) -> dict:
-    """Add connection to inbound, outbound, events and return updated config."""
+    """Add connection to inbound, outbound, event and return updated config."""
     filter = ["inbound", "event", "outbound", "connection"]
     for key, value in config_dict.items():
         if key in filter:

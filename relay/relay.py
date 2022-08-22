@@ -12,6 +12,7 @@ from uuid import uuid4
 from typing import Union
 
 from status_endpoint.status_endpoints import start_status_endpoints_server
+from redis_queue.v1_0.utils import process_payload_recip_key
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s: %(message)s",
@@ -147,7 +148,7 @@ class WSRelay(Relay):
             if inbound.done():
                 msg: WSMessage = inbound.result()
                 if isinstance(msg.data, str):
-                    message_data = str.encode(msg.data)
+                    message_data = (msg.data).encode("utf-8")
                 else:
                     message_data = msg.data
                 if msg.type in (WSMsgType.TEXT, WSMsgType.BINARY):
@@ -174,8 +175,11 @@ class WSRelay(Relay):
                         )
                         response_sent = False
                         while not response_sent:
+                            recip_key_incl_topic, _ = await process_payload_recip_key(
+                                self.redis, message_data, self.inbound_topic
+                            )
                             try:
-                                await self.redis.rpush(self.inbound_topic, message)
+                                await self.redis.rpush(recip_key_incl_topic, message)
                                 response_sent = True
                             except RedisError as err:
                                 await asyncio.sleep(1)
@@ -214,8 +218,11 @@ class WSRelay(Relay):
                         )
                         msg_sent = False
                         while not msg_sent:
+                            recip_key_incl_topic, _ = await process_payload_recip_key(
+                                self.redis, message_data, self.inbound_topic
+                            )
                             try:
-                                await self.redis.rpush(self.inbound_topic, message)
+                                await self.redis.rpush(recip_key_incl_topic, message)
                                 msg_sent = True
                             except RedisError as err:
                                 await asyncio.sleep(1)
@@ -286,7 +293,7 @@ class HttpRelay(Relay):
         else:
             body = await request.read()
         if isinstance(body, str):
-            message_data = str.encode(body)
+            message_data = body.encode("utf-8")
         else:
             message_data = body
         message_dict = json.loads(body)
@@ -310,8 +317,11 @@ class HttpRelay(Relay):
             )
             response_sent = False
             while not response_sent:
+                recip_key_incl_topic, _ = await process_payload_recip_key(
+                    self.redis, message_data, self.inbound_topic
+                )
                 try:
-                    await self.redis.rpush(self.inbound_topic, message)
+                    await self.redis.rpush(recip_key_incl_topic, message)
                     response_sent = True
                 except RedisError as err:
                     await asyncio.sleep(1)
@@ -353,8 +363,11 @@ class HttpRelay(Relay):
             )
             msg_sent = False
             while not msg_sent:
+                recip_key_incl_topic, _ = await process_payload_recip_key(
+                    self.redis, message_data, self.inbound_topic
+                )
                 try:
-                    await self.redis.rpush(self.inbound_topic, message)
+                    await self.redis.rpush(recip_key_incl_topic, message)
                     msg_sent = True
                 except RedisError as err:
                     await asyncio.sleep(1)
@@ -374,8 +387,8 @@ def main():
         raise SystemExit("No Redis host/connection provided.")
     if not INBOUND_TRANSPORT_CONFIG:
         raise SystemExit("No inbound transport config provided.")
-    INBOUND_MSG_TOPIC = f"{TOPIC_PREFIX}-inbound-message"
-    INBOUND_MSG_DIRECT_RESP = f"{TOPIC_PREFIX}-inbound-direct-response"
+    INBOUND_MSG_TOPIC = f"{TOPIC_PREFIX}_inbound_message"
+    INBOUND_MSG_DIRECT_RESP = f"{TOPIC_PREFIX}_inbound_direct_response"
     handlers = []
     for inbound_transport in json.loads(INBOUND_TRANSPORT_CONFIG):
         transport_type, site_host, site_port = inbound_transport

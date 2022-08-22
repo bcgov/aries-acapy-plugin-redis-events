@@ -306,7 +306,13 @@ class TestRedisHTTPHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = HttpRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
@@ -327,7 +333,13 @@ class TestRedisHTTPHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = HttpRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
@@ -356,7 +368,13 @@ class TestRedisHTTPHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = HttpRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
@@ -391,7 +409,13 @@ class TestRedisHTTPHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = HttpRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
@@ -636,7 +660,9 @@ class TestRedisWSHandler(AsyncTestCase):
         )
         mock_msg = async_mock.MagicMock(
             type=aiohttp.WSMsgType.TEXT.value,
-            data=str.encode(json.dumps({"test": "....", "~transport": {"return_route": "..."}})),
+            data=str.encode(
+                json.dumps({"test": "....", "~transport": {"return_route": "..."}})
+            ),
         )
 
         with async_mock.patch.object(
@@ -691,7 +717,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             mock_get_direct_responses.return_value = {
                 "response": "eyJ0ZXN0IjogIi4uLiIsICJ0ZXN0MiI6ICJ0ZXN0MiJ9"
             }
@@ -766,7 +798,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             mock_get_direct_responses.return_value = {
                 "response": "eyJ0ZXN0IjogIi4uLiIsICJ0ZXN0MiI6ICJ0ZXN0MiJ9"
             }
@@ -841,7 +879,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.cluster.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = WSRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
@@ -913,7 +957,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             mock_get_direct_responses.side_effect = test_module.asyncio.TimeoutError
             service = WSRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
@@ -981,7 +1031,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             mock_get_direct_responses.return_value = {
                 "response": "eyJ0ZXN0IjogIi4uLiIsICJ0ZXN0MiI6ICJ0ZXN0MiJ9"
             }
@@ -1049,7 +1105,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = WSRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
@@ -1112,7 +1174,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = WSRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
@@ -1179,7 +1247,13 @@ class TestRedisWSHandler(AsyncTestCase):
             redis.asyncio.RedisCluster,
             "from_url",
             async_mock.MagicMock(),
-        ) as mock_redis:
+        ) as mock_redis, async_mock.patch.object(
+            test_module,
+            "process_payload_recip_key",
+            async_mock.CoroutineMock(
+                return_value=("acapy_inbound_input_recip_key", async_mock.MagicMock())
+            ),
+        ):
             service = WSRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
