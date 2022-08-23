@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "deliverer"
+name = "redis_deliverer"
 version = "0.1.0"
 description = "Deliver outbound messages from ACA-Py (Redis Queue)"
 authors = ["Shaanjot Gill <gill.shaanjots@gmail.com>"]

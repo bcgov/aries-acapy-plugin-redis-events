@@ -17,7 +17,7 @@ RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/inst
 RUN poetry config virtualenvs.create true; poetry config virtualenvs.in-project true
 
 COPY ./pyproject.toml ./poetry.lock ./
-RUN mkdir ./relay && touch ./relay/__init__.py
+RUN mkdir ./relay && touch ./relay/relay.py
 RUN poetry install
 
 # Copy virtual environment into clean base
@@ -31,5 +31,6 @@ ENV WAIT_VERSION 2.7.2
 ADD https://github.com/ufoscout/docker-compose-wait/releases/download/$WAIT_VERSION/wait /wait
 RUN chmod +x /wait
 
-COPY ./deliverer/ ./deliverer/
-ENTRYPOINT ["/bin/sh", "-c", "/wait && python -m deliverer \"$@\"", "--"]
+COPY ./relay/ ./relay/
+ENTRYPOINT ["/bin/sh", "-c", "/wait && python -m relay.relay \"$@\"", "--"]
+

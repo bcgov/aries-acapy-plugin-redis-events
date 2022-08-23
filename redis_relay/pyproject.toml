@@ -1,15 +1,13 @@
 [tool.poetry]
-name = "redis_queue"
+name = "relay"
 version = "0.1.0"
 description = "ACA-Py Redis HTTP and WS relay"
 authors = ["Shaanjot Gill <gill.shaanjots@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.6.9"
-aries-cloudagent = "^0.7.3rc0"
-ecdsa = "^0.16.1"
 redis = "^4.1.4"
-pydantic = "^1.8.2"
+aiohttp = "^3.7.4"
 fastapi = "^0.68.0"
 uvicorn = "0.16.0"
 

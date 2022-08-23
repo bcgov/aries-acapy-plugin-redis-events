@@ -1,16 +1,16 @@
 redis_queue:
   connection: 
-    connection_url: "redis_test_url"
+    connection_url: "redis://default:test1234@172.28.0.103:6379"
 
   ### For Inbound ###
   inbound:
-    acapy_inbound_topic: "acapy-inbound-message"
-    acapy_direct_resp_topic: "acapy-inbound-direct-resp"
+    acapy_inbound_topic: "acapy_inbound"
+    acapy_direct_resp_topic: "acapy_inbound_direct_resp"
 
   ### For Outbound ###
   outbound:
-    acapy_outbound_topic: "acapy-outbound-message"
-    acapy_outbound_retry_topic: "acapy-outbound-retry"
+    acapy_outbound_topic: "acapy_outbound"
+    mediator_mode: false
 
   ### For Event ###
   event:
