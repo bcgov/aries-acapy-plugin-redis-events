@@ -1,18 +1,19 @@
 import asyncio
 import logging
 import base64
-import sys
+import signal
 import json
 
 from aiohttp import WSMessage, WSMsgType, web
+from contextlib import suppress
 from redis.asyncio import RedisCluster
-from redis.exceptions import RedisError
+from redis.exceptions import RedisError, RedisClusterException
 from os import getenv
 from uuid import uuid4
 from typing import Union
 
 from status_endpoint.status_endpoints import start_status_endpoints_server
-from redis_queue.v1_0.utils import process_payload_recip_key
+from redis_queue.v1_0.utils import process_payload_recip_key, b64_to_bytes
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s: %(message)s",
@@ -45,17 +46,6 @@ class Relay:
         self.timedelay_s = 1
         self.connection_url = connection_url
 
-    def b64_to_bytes(self, val: Union[str, bytes], urlsafe=True) -> bytes:
-        """Convert a base 64 string to bytes."""
-        if isinstance(val, str):
-            val = val.encode("ascii")
-        if urlsafe:
-            missing_padding = len(val) % 4
-            if missing_padding:
-                val += b"=" * (4 - missing_padding)
-            return base64.urlsafe_b64decode(val)
-        return base64.b64decode(val)
-
     async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
         try:
@@ -64,7 +54,7 @@ class Relay:
                 return True
             else:
                 return False
-        except RedisError:
+        except (RedisError, RedisClusterException):
             return False
 
     async def stop(self) -> None:
@@ -81,9 +71,9 @@ class Relay:
                 try:
                     msg = await self.redis.blpop(self.direct_resp_topic, 0.2)
                     msg_received = True
-                except RedisError as err:
+                except (RedisError, RedisClusterException) as err:
                     await asyncio.sleep(1)
-                    logging.exception(f"Unexpected redis client exception: {str(err)}")
+                    logging.exception(f"Unexpected redis client exception: {err}")
             if not msg:
                 await asyncio.sleep(1)
                 continue
@@ -120,9 +110,10 @@ class WSRelay(Relay):
             self.ready = True
             self.running = True
             await asyncio.gather(self.start(), self.process_direct_responses())
-        except RedisError:
+        except (RedisError, RedisClusterException) as err:
             self.ready = False
             self.running = False
+            logging.exception(f"Unexpected redis client exception: {err}")
 
     async def start(self):
         """Construct the aiohttp application."""
@@ -181,10 +172,10 @@ class WSRelay(Relay):
                             try:
                                 await self.redis.rpush(recip_key_incl_topic, message)
                                 response_sent = True
-                            except RedisError as err:
+                            except (RedisError, RedisClusterException) as err:
                                 await asyncio.sleep(1)
                                 logging.exception(
-                                    f"Unexpected redis client exception: {str(err)}"
+                                    f"Unexpected redis client exception: {err}"
                                 )
                         try:
                             response_data = await asyncio.wait_for(
@@ -193,10 +184,7 @@ class WSRelay(Relay):
                                 ),
                                 15,
                             )
-                            if isinstance(response_data["response"], bytes):
-                                response = self.b64_to_bytes(response_data["response"])
-                            else:
-                                response = response_data["response"]
+                            response = b64_to_bytes(response_data["response"])
                             if response:
                                 if isinstance(response, bytes):
                                     await ws.send_bytes(response)
@@ -224,10 +212,10 @@ class WSRelay(Relay):
                             try:
                                 await self.redis.rpush(recip_key_incl_topic, message)
                                 msg_sent = True
-                            except RedisError as err:
+                            except (RedisError, RedisClusterException) as err:
                                 await asyncio.sleep(1)
                                 logging.exception(
-                                    f"Unexpected redis client exception: {str(err)}"
+                                    f"Unexpected redis client exception: {err}"
                                 )
                 elif msg.type == WSMsgType.ERROR:
                     logging.error(
@@ -261,9 +249,10 @@ class HttpRelay(Relay):
             self.ready = True
             self.running = True
             await asyncio.gather(self.start(), self.process_direct_responses())
-        except RedisError:
+        except (RedisError, RedisClusterException) as err:
             self.ready = False
             self.running = False
+            logging.exception(f"Unexpected redis client exception: {err}")
 
     async def start(self):
         """Construct the aiohttp application."""
@@ -323,9 +312,9 @@ class HttpRelay(Relay):
                 try:
                     await self.redis.rpush(recip_key_incl_topic, message)
                     response_sent = True
-                except RedisError as err:
+                except (RedisError, RedisClusterException) as err:
                     await asyncio.sleep(1)
-                    logging.exception(f"Unexpected redis client exception: {str(err)}")
+                    logging.exception(f"Unexpected redis client exception: {err}")
             try:
                 response_data = await asyncio.wait_for(
                     self.get_direct_responses(
@@ -333,7 +322,7 @@ class HttpRelay(Relay):
                     ),
                     15,
                 )
-                response = self.b64_to_bytes(response_data["response"])
+                response = b64_to_bytes(response_data["response"])
                 content_type = (
                     response_data["content_type"]
                     if "content_type" in response_data
@@ -369,13 +358,13 @@ class HttpRelay(Relay):
                 try:
                     await self.redis.rpush(recip_key_incl_topic, message)
                     msg_sent = True
-                except RedisError as err:
+                except (RedisError, RedisClusterException) as err:
                     await asyncio.sleep(1)
-                    logging.exception(f"Unexpected redis client exception: {str(err)}")
+                    logging.exception(f"Unexpected redis client exception: {err}")
             return web.Response(status=200)
 
 
-def main():
+async def main():
     """Start services."""
     REDIS_SERVER_URL = getenv("REDIS_SERVER_URL")
     TOPIC_PREFIX = getenv("TOPIC_PREFIX", "acapy")
@@ -390,6 +379,7 @@ def main():
     INBOUND_MSG_TOPIC = f"{TOPIC_PREFIX}_inbound_message"
     INBOUND_MSG_DIRECT_RESP = f"{TOPIC_PREFIX}_inbound_direct_response"
     handlers = []
+    tasks = []
     for inbound_transport in json.loads(INBOUND_TRANSPORT_CONFIG):
         transport_type, site_host, site_port = inbound_transport
         if transport_type == "ws":
@@ -420,15 +410,34 @@ def main():
             handlers.append(handler)
         else:
             raise SystemExit("Only ws and http transport type are supported.")
-        asyncio.ensure_future(handler.run())
+        tasks.append(asyncio.ensure_future(handler.run()))
     if STATUS_ENDPOINT_HOST and STATUS_ENDPOINT_PORT and STATUS_ENDPOINT_API_KEY:
-        start_status_endpoints_server(
-            STATUS_ENDPOINT_HOST,
-            STATUS_ENDPOINT_PORT,
-            STATUS_ENDPOINT_API_KEY,
-            handlers,
+        tasks.append(
+            asyncio.ensure_future(
+                start_status_endpoints_server(
+                    STATUS_ENDPOINT_HOST,
+                    STATUS_ENDPOINT_PORT,
+                    STATUS_ENDPOINT_API_KEY,
+                    handlers,
+                )
+            )
         )
+    await asyncio.gather(*tasks)
 
 
-if __name__ == "__main__":
-    main()
+def init():
+    if __name__ == "__main__":
+        loop = asyncio.get_event_loop()
+        main_task = asyncio.ensure_future(main())
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, main_task.cancel)
+
+        try:
+            with suppress(asyncio.CancelledError):
+                loop.run_until_complete(main_task)
+        finally:
+            loop.close()
+
+
+init()

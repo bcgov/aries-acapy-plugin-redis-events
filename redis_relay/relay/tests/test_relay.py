@@ -1,15 +1,13 @@
 import aiohttp
-import base64
 import os
 import json
 import redis
-import uvicorn
 
 from asynctest import TestCase as AsyncTestCase, mock as async_mock, PropertyMock
 from pathlib import Path
 
 from .. import relay as test_module
-from ..relay import HttpRelay, Relay, WSRelay, main
+from ..relay import HttpRelay, Relay, WSRelay
 
 test_retry_msg_a = str.encode(json.dumps(["invalid", "list", "require", "dict"]))
 test_retry_msg_b = str.encode(
@@ -92,7 +90,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
         ), async_mock.patch.object(
             WSRelay, "run", async_mock.CoroutineMock()
         ), async_mock.patch.object(
-            test_module, "start_status_endpoints_server", async_mock.MagicMock()
+            test_module, "start_status_endpoints_server", async_mock.CoroutineMock()
         ) as mock_status_endpoint, async_mock.patch.dict(
             os.environ,
             {
@@ -106,7 +104,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
             sentinel = PropertyMock(return_value=False)
             HttpRelay.running = sentinel
             WSRelay.running = sentinel
-            main()
+            await test_module.main()
 
     async def test_main_x(self):
         with async_mock.patch.dict(
@@ -119,7 +117,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
             },
         ):
             with self.assertRaises(SystemExit):
-                main()
+                await test_module.main()
 
         with async_mock.patch.dict(
             os.environ,
@@ -131,7 +129,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
             },
         ):
             with self.assertRaises(SystemExit):
-                main()
+                await test_module.main()
 
         with async_mock.patch.dict(
             os.environ,
@@ -144,7 +142,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
             },
         ):
             with self.assertRaises(SystemExit):
-                main()
+                await test_module.main()
 
         with async_mock.patch.object(
             redis.asyncio.RedisCluster,
@@ -165,7 +163,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
         ), async_mock.patch.object(
             WSRelay, "run", async_mock.CoroutineMock()
         ), async_mock.patch.object(
-            test_module, "start_status_endpoints_server", async_mock.MagicMock()
+            test_module, "start_status_endpoints_server", async_mock.CoroutineMock()
         ) as mock_status_endpoint, async_mock.patch.dict(
             os.environ,
             {
@@ -176,7 +174,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
                 "INBOUND_TRANSPORT_CONFIG": '[["http", "0.0.0.0", "8021"],["ws", "0.0.0.0", "8023"]]',
             },
         ):
-            main()
+            await test_module.main()
 
     async def test_stop(self):
         with async_mock.patch.object(
@@ -239,11 +237,12 @@ class TestRedisHTTPHandler(AsyncTestCase):
                     (None, test_retry_msg_a),
                     (None, test_retry_msg_b),
                     (None, test_retry_msg_c),
+                    None,
                     test_module.RedisError,
                     (None, test_retry_msg_d),
                 ]
             )
-            sentinel = PropertyMock(side_effect=[True, True, True, True, False])
+            sentinel = PropertyMock(side_effect=[True, True, True, True, True, False])
             HttpRelay.running = sentinel
             service = HttpRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
@@ -354,7 +353,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
                         json.dumps(
                             {"test": "....", "~transport": {"return_route": "..."}}
                         )
-                    ).decode()
+                    )
                 ),
                 host="test",
                 remote="test",
@@ -385,15 +384,13 @@ class TestRedisHTTPHandler(AsyncTestCase):
             mock_request = async_mock.MagicMock(
                 headers={"content-type": "..."},
                 read=async_mock.CoroutineMock(
-                    return_value=str.encode(
-                        json.dumps(
-                            {
-                                "content-type": "application/json",
-                                "test": "....",
-                                "~transport": {"return_route": "..."},
-                            }
-                        )
-                    ).decode()
+                    return_value=json.dumps(
+                        {
+                            "content-type": "application/json",
+                            "test": "....",
+                            "~transport": {"return_route": "..."},
+                        }
+                    )
                 ),
                 host="test",
                 remote="test",
@@ -432,7 +429,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
                         json.dumps(
                             {"test": "....", "~transport": {"return_route": "..."}}
                         )
-                    ).decode()
+                    )
                 ),
                 host="test",
                 remote="test",
@@ -451,7 +448,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
             mock_request = async_mock.MagicMock(
                 headers={"content-type": "..."},
                 read=async_mock.CoroutineMock(
-                    return_value=str.encode(json.dumps({"test": "...."})).decode()
+                    return_value=str.encode(json.dumps({"test": "...."}))
                 ),
                 host="test",
                 remote="test",
@@ -1242,7 +1239,7 @@ class TestRedisWSHandler(AsyncTestCase):
         ) as mock_wait, async_mock.patch.object(
             test_module.asyncio,
             "wait_for",
-            async_mock.CoroutineMock(),
+            async_mock.CoroutineMock(return_value=b"{}"),
         ) as mock_wait_for, async_mock.patch.object(
             redis.asyncio.RedisCluster,
             "from_url",
@@ -1302,9 +1299,28 @@ class TestRedisWSHandler(AsyncTestCase):
             assert not await service.is_running()
 
     def test_b64_to_bytes(self):
-        service = WSRelay(
-            "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
-        )
-        service.b64_to_bytes(
+        test_module.b64_to_bytes(
             "eyJ0ZXN0IjogIi4uLiIsICJ0ZXN0MiI6ICJ0ZXN0MiJ9", urlsafe=False
         ) == b'{"test": "...", "test2": "test2"}'
+
+    def test_init(self):
+        with async_mock.patch.object(
+            test_module, "__name__", "__main__"
+        ), async_mock.patch.object(
+            test_module, "signal", autospec=True
+        ), async_mock.patch.object(
+            test_module,
+            "asyncio",
+            async_mock.MagicMock(
+                get_event_loop=async_mock.MagicMock(
+                    add_signal_handler=async_mock.MagicMock(),
+                    run_until_complete=async_mock.MagicMock(),
+                    close=async_mock.MagicMock(),
+                ),
+                ensure_future=async_mock.MagicMock(
+                    cancel=async_mock.MagicMock(),
+                ),
+                CancelledError=async_mock.MagicMock(),
+            ),
+        ):
+            test_module.init()

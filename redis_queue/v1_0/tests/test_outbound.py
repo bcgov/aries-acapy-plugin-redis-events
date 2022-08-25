@@ -33,7 +33,7 @@ SETTINGS = {
                 "mediator_mode": True,
             },
             "event": {
-                "topic_maps": {
+                "event_topic_maps": {
                     "^acapy::webhook::(.*)$": "acapy-webhook-$wallet_id",
                     "^acapy::record::([^:]*)::([^:]*)$": "acapy-record-with-state-$wallet_id",
                     "^acapy::record::([^:])?": "acapy-record-$wallet_id",
@@ -567,7 +567,7 @@ class TestRedisOutbound(AsyncTestCase):
         assert isinstance(test_redis_config.outbound, test_config.OutboundConfig)
         assert isinstance(test_redis_config.connection, test_config.ConnectionConfig)
 
-        assert test_redis_config.event.topic_maps == {
+        assert test_redis_config.event.event_topic_maps == {
             "^acapy::webhook::(.*)$": "acapy-webhook-$wallet_id",
             "^acapy::record::([^:]*)::([^:]*)$": "acapy-record-with-state-$wallet_id",
             "^acapy::record::([^:])?": "acapy-record-$wallet_id",

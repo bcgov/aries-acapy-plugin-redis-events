@@ -1,10 +1,11 @@
 import logging
 import uvicorn
+import nest_asyncio
 
 from fastapi import Security, Depends, APIRouter, HTTPException
 from fastapi.security.api_key import APIKeyHeader
 
-
+nest_asyncio.apply()
 router = APIRouter()
 API_KEY_NAME = "access_token"
 X_API_KEY = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -18,7 +19,7 @@ async def get_api_key(x_api_key: str = Security(X_API_KEY)):
         raise HTTPException(status_code=403, detail="Could not validate key")
 
 
-def start_status_endpoints_server(api_host, api_port, api_key, handlers):
+async def start_status_endpoints_server(api_host, api_port, api_key, handlers):
     logging.info(f"Starting FastAPI service: http://{api_host}:{api_port}")
     global API_KEY
     API_KEY = api_key

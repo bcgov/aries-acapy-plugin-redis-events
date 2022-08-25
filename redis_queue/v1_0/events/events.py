@@ -28,7 +28,7 @@ async def setup(context: InjectionContext):
     if not bus:
         raise ValueError("EventBus missing in context")
 
-    for event in config.topic_maps.keys():
+    for event in config.event_topic_maps.keys():
         LOGGER.info(f"subscribing to event: {event}")
         bus.subscribe(re.compile(event), handle_event)
 
@@ -74,9 +74,10 @@ async def handle_event(profile: Profile, event: EventWithMetadata):
         "category": _derive_category(event.topic),
         "payload": event.payload,
     }
+    webhook_urls = profile.settings.get("admin.webhook_urls")
     try:
-        config = get_config(profile.settings).event or EventConfig.default()
-        template = config.topic_maps[event.metadata.pattern.pattern]
+        config_events = get_config(profile.settings).event or EventConfig.default()
+        template = config_events.event_topic_maps[event.metadata.pattern.pattern]
         kafka_topic = Template(template).substitute(**payload)
         LOGGER.info(f"Sending message {payload} with Kafka topic {kafka_topic}")
         outbound = str.encode(
@@ -91,5 +92,36 @@ async def handle_event(profile: Profile, event: EventWithMetadata):
             kafka_topic,
             outbound,
         )
+        # Deliver/dispatch events to webhook_urls directly
+        if config_events.deliver_webhook and webhook_urls:
+            config_outbound = (
+                get_config(profile.settings).outbound or OutboundConfig.default()
+            )
+            for endpoint in webhook_urls:
+                api_key = None
+                if len(endpoint.split("#")) > 1:
+                    endpoint_hash_split = endpoint.split("#")
+                    endpoint = endpoint_hash_split[0]
+                    api_key = endpoint_hash_split[1]
+                webhook_topic = config_events.event_webhook_topic_maps.get(event.topic)
+                endpoint = f"{endpoint}/topic/{webhook_topic}/"
+                headers = {"x-wallet-id": wallet_id} if wallet_id else {}
+                if not api_key:
+                    headers["x-api-key"] = api_key
+                outbound = str.encode(
+                    json.dumps(
+                        {
+                            "service": {"url": endpoint},
+                            "payload": base64.urlsafe_b64encode(
+                                str.encode(json.dumps(payload))
+                            ).decode(),
+                            "headers": headers,
+                        }
+                    ),
+                )
+                await redis.rpush(
+                    config_outbound.acapy_outbound_topic,
+                    outbound,
+                )
     except (RedisError, ValueError) as err:
         LOGGER.exception(f"Failed to process and send webhook, {err}")

@@ -3,14 +3,57 @@
 import logging
 from multiprocessing import connection
 from typing import Any, List, Mapping, Optional, Union
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, validator
 
 
 LOGGER = logging.getLogger(__name__)
 
+EVENT_TOPIC_MAP = {
+    "^acapy::webhook::(.*)$": "acapy-webhook-$wallet_id",
+    "^acapy::record::([^:]*)::([^:]*)$": "acapy-record-with-state-$wallet_id",
+    "^acapy::record::([^:])?": "acapy-record-$wallet_id",
+    "acapy::basicmessage::received": "acapy-basicmessage-received",
+    "acapy::problem_report": "acapy-problem_report",
+    "acapy::ping::received": "acapy-ping-received",
+    "acapy::ping::response_received": "acapy-ping-response_received",
+    "acapy::actionmenu::received": "acapy-actionmenu-received",
+    "acapy::actionmenu::get-active-menu": "acapy-actionmenu-get-active-menu",
+    "acapy::actionmenu::perform-menu-action": "acapy-actionmenu-perform-menu-action",
+    "acapy::keylist::updated": "acapy-keylist-updated",
+    "acapy::revocation-notification::received": "acapy-revocation-notification-received",
+    "acapy::revocation-notification-v2::received": "acapy-revocation-notification-v2-received",
+    "acapy::forward::received": "acapy-forward-received",
+}
+
+EVENT_WEBHOOK_TOPIC_MAP = {
+    "acapy::basicmessage::received": "basicmessages",
+    "acapy::problem_report": "problem_report",
+    "acapy::ping::received": "ping",
+    "acapy::ping::response_received": "ping",
+    "acapy::actionmenu::received": "actionmenu",
+    "acapy::actionmenu::get-active-menu": "get-active-menu",
+    "acapy::actionmenu::perform-menu-action": "perform-menu-action",
+    "acapy::keylist::updated": "keylist",
+}
+
 
 def _alias_generator(key: str) -> str:
     return key.replace("_", "-")
+
+
+class NoneDefaultModel(BaseModel):
+    @validator("*", pre=True)
+    def not_none(cls, v, field):
+        if all(
+            (
+                # Cater for the occasion where field.default in (0, False)
+                getattr(field, "default", None) is not None,
+                v is None,
+            )
+        ):
+            return field.default
+        else:
+            return v
 
 
 class ConnectionConfig(BaseModel):
@@ -25,8 +68,10 @@ class ConnectionConfig(BaseModel):
         return cls(connection_url="redis://default:test1234@172.28.0.103:6379")
 
 
-class EventConfig(BaseModel):
-    topic_maps: Mapping[str, str]
+class EventConfig(NoneDefaultModel):
+    event_topic_maps: Mapping[str, str] = EVENT_TOPIC_MAP
+    event_webhook_topic_maps: Mapping[str, str] = EVENT_WEBHOOK_TOPIC_MAP
+    deliver_webhook: bool = True
 
     class Config:
         alias_generator = _alias_generator
@@ -35,28 +80,15 @@ class EventConfig(BaseModel):
     @classmethod
     def default(cls):
         return cls(
-            topic_maps={
-                "^acapy::webhook::(.*)$": "acapy-webhook-$wallet_id",
-                "^acapy::record::([^:]*)::([^:]*)$": "acapy-record-with-state-$wallet_id",
-                "^acapy::record::([^:])?": "acapy-record-$wallet_id",
-                "acapy::basicmessage::received": "acapy-basicmessage-received",
-                "acapy::problem_report": "acapy-problem_report",
-                "acapy::ping::received": "acapy-ping-received",
-                "acapy::ping::response_received": "acapy-ping-response_received",
-                "acapy::actionmenu::received": "acapy-actionmenu-received",
-                "acapy::actionmenu::get-active-menu": "acapy-actionmenu-get-active-menu",
-                "acapy::actionmenu::perform-menu-action": "acapy-actionmenu-perform-menu-action",
-                "acapy::keylist::updated": "acapy-keylist-updated",
-                "acapy::revocation-notification::received": "acapy-revocation-notification-received",
-                "acapy::revocation-notification-v2::received": "acapy-revocation-notification-v2-received",
-                "acapy::forward::received": "acapy-forward-received",
-            },
+            event_topic_maps=EVENT_TOPIC_MAP,
+            event_webhook_topic_maps=EVENT_WEBHOOK_TOPIC_MAP,
+            deliver_webhook=True,
         )
 
 
-class InboundConfig(BaseModel):
-    acapy_inbound_topic: str
-    acapy_direct_resp_topic: str
+class InboundConfig(NoneDefaultModel):
+    acapy_inbound_topic: str = "acapy_inbound"
+    acapy_direct_resp_topic: str = "acapy_inbound_direct_resp"
 
     class Config:
         alias_generator = _alias_generator
@@ -70,9 +102,9 @@ class InboundConfig(BaseModel):
         )
 
 
-class OutboundConfig(BaseModel):
-    acapy_outbound_topic: str
-    mediator_mode: bool
+class OutboundConfig(NoneDefaultModel):
+    acapy_outbound_topic: str = "acapy_outbound"
+    mediator_mode: bool = False
 
     @classmethod
     def default(cls):

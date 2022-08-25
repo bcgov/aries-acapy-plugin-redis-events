@@ -16,7 +16,7 @@ ENV PATH="$POETRY_HOME/bin:$VENV/bin:$PATH"
 RUN curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python -
 RUN poetry config virtualenvs.create true; poetry config virtualenvs.in-project true
 
-COPY ./pyproject.toml ./poetry.lock ./
+COPY ./redis_deliverer/pyproject.toml ./redis_deliverer/poetry.lock ./
 RUN mkdir ./relay && touch ./relay/relay.py
 RUN poetry install
 
@@ -31,5 +31,6 @@ ENV WAIT_VERSION 2.7.2
 ADD https://github.com/ufoscout/docker-compose-wait/releases/download/$WAIT_VERSION/wait /wait
 RUN chmod +x /wait
 
-COPY ./deliver/ ./deliver/
-ENTRYPOINT ["/bin/sh", "-c", "/wait && python -m deliver.deliver \"$@\"", "--"]
+COPY redis_deliverer redis_deliverer
+COPY status_endpoint status_endpoint
+ENTRYPOINT ["/bin/sh", "-c", "/wait && python -m redis_deliverer.deliver.deliver \"$@\"", "--"]

@@ -14,8 +14,9 @@ redis_queue:
 
   ### For Event ###
   event:
-    topic_maps:
+    event_topic_maps:
       ^acapy::webhook::(.*)$: acapy-webhook-$wallet_id
       ^acapy::record::([^:]*)::([^:]*)$: acapy-record-with-state-$wallet_id
       ^acapy::record::([^:])?: acapy-record-$wallet_id
       acapy::basicmessage::.*: acapy-basicmessage
+    deliver_webhook: true

@@ -5,6 +5,7 @@ from aries_cloudagent.core.in_memory import InMemoryProfile
 from aries_cloudagent.core.event_bus import EventBus, Event, MockEventBus
 from aiohttp.test_utils import unused_port
 from asynctest import TestCase as AsyncTestCase, mock as async_mock, PropertyMock
+from copy import deepcopy
 from redis.asyncio import RedisCluster
 from redis.exceptions import RedisError
 
@@ -114,6 +115,36 @@ class TestRedisEvents(AsyncTestCase):
     async def test_handle_event(self):
         self.profile.settings["emit_new_didcomm_mime_type"] = True
         self.profile.settings["wallet.id"] = "test_wallet_id"
+        self.profile.context.injector.bind_instance(
+            RedisCluster,
+            async_mock.MagicMock(
+                rpush=async_mock.CoroutineMock(),
+            ),
+        )
+        test_event_with_metadata = async_mock.MagicMock(
+            payload={
+                "state": "test_state",
+                "test": "test",
+            },
+            topic="acapy::basicmessage::received",
+            metadata=async_mock.MagicMock(
+                pattern=async_mock.MagicMock(pattern="acapy::basicmessage::received")
+            ),
+        )
+        await test_events.handle_event(self.profile, test_event_with_metadata)
+
+    async def test_handle_event_deliver_webhook(self):
+        test_settings = deepcopy(SETTINGS)
+        test_settings["plugin_config"]["redis_queue"]["event"] = {
+            "deliver_webhook": True
+        }
+        self.profile.settings["plugin_config"] = test_settings["plugin_config"]
+        self.profile.settings["emit_new_didcomm_mime_type"] = True
+        self.profile.settings["wallet.id"] = "test_wallet_id"
+        self.profile.settings["admin.webhook_urls"] = [
+            "http://0.0.0.0:9000#test_api_key_a",
+            "ws://0.0.0.0:9001",
+        ]
         self.profile.context.injector.bind_instance(
             RedisCluster,
             async_mock.MagicMock(

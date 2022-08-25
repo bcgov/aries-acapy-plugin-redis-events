@@ -26,4 +26,4 @@ COPY ./docker/default.yml .
 COPY ./docker/plugins-config.yaml .
 
 ENTRYPOINT ["/bin/sh", "-c", "/wait && poetry run aca-py \"$@\"", "--"]
-CMD ["start",  "--plugin", "redis_queue", "--arg-file", "default.yml"]
+CMD ["start",  "--plugin", "redis_queue.events", "--arg-file", "default.yml"]

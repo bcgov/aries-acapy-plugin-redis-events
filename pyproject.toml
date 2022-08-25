@@ -15,9 +15,6 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent"
 ]
-packages = [
-    { include = "redis_queue" }
-]
 [tool.poetry.dependencies]
 python = "^3.6.9"
 aries-cloudagent = "^0.7.4"

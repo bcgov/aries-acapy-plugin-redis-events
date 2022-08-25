@@ -159,15 +159,15 @@ class TestRedisHandler(AsyncTestCase):
                 "STATUS_ENDPOINT_API_KEY": "test1234",
             },
         ), async_mock.patch.object(
-            test_module, "start_status_endpoints_server", async_mock.MagicMock()
+            test_module, "start_status_endpoints_server", async_mock.CoroutineMock()
         ) as mock_status_endpoint:
             mock_redis.return_value = async_mock.MagicMock()
-            main()
+            await main()
             mock_status_endpoint.assert_called_once()
 
     async def test_main_x(self):
         with self.assertRaises(SystemExit):
-            main()
+            await main()
 
         with async_mock.patch.object(
             redis.asyncio.RedisCluster,
@@ -178,14 +178,14 @@ class TestRedisHandler(AsyncTestCase):
         ), async_mock.patch.object(
             Deliverer, "process_retries", autospec=True
         ), async_mock.patch.object(
-            test_module, "start_status_endpoints_server", async_mock.MagicMock()
+            test_module, "start_status_endpoints_server", async_mock.CoroutineMock()
         ) as mock_status_endpoint, async_mock.patch.dict(
             os.environ,
             {
                 "REDIS_SERVER_URL": "test",
             },
         ):
-            main()
+            await main()
             assert mock_status_endpoint.call_count == 0
         with async_mock.patch.object(
             redis.asyncio.RedisCluster,
@@ -196,7 +196,7 @@ class TestRedisHandler(AsyncTestCase):
         ), async_mock.patch.object(
             Deliverer, "process_retries", autospec=True
         ), async_mock.patch.object(
-            test_module, "start_status_endpoints_server", async_mock.MagicMock()
+            test_module, "start_status_endpoints_server", async_mock.CoroutineMock()
         ) as mock_status_endpoint, async_mock.patch.dict(
             os.environ,
             {
@@ -205,7 +205,7 @@ class TestRedisHandler(AsyncTestCase):
                 "STATUS_ENDPOINT_PORT": "0.0.0.0",
             },
         ):
-            main()
+            await main()
             assert mock_status_endpoint.call_count == 0
         sentinel = PropertyMock(return_value=False)
         Deliverer.running = sentinel
@@ -220,7 +220,7 @@ class TestRedisHandler(AsyncTestCase):
         ), async_mock.patch.object(
             Deliverer, "process_retries", autospec=True
         ), async_mock.patch.object(
-            test_module, "start_status_endpoints_server", async_mock.MagicMock()
+            test_module, "start_status_endpoints_server", async_mock.CoroutineMock()
         ) as mock_status_endpoint, async_mock.patch.dict(
             os.environ,
             {
@@ -230,7 +230,7 @@ class TestRedisHandler(AsyncTestCase):
                 "STATUS_ENDPOINT_API_KEY": "test1234",
             },
         ):
-            main()
+            await main()
             assert mock_status_endpoint.call_count == 1
 
     async def test_run(self):
@@ -303,10 +303,13 @@ class TestRedisHandler(AsyncTestCase):
         ) as mock_redis, async_mock.patch.object(
             Deliverer, "process_retries", async_mock.CoroutineMock()
         ):
-            Deliverer.running = PropertyMock(side_effect=[True, True, True, False])
+            Deliverer.running = PropertyMock(
+                side_effect=[True, True, True, True, False]
+            )
             mock_redis.blpop = async_mock.CoroutineMock(
                 side_effect=[
                     test_msg_a,
+                    None,
                     test_msg_c,
                     test_msg_d,
                 ]
@@ -428,3 +431,25 @@ class TestRedisHandler(AsyncTestCase):
             service.redis = mock_redis
             service.running = True
             assert not await service.is_running()
+
+    def test_init(self):
+        with async_mock.patch.object(
+            test_module, "__name__", "__main__"
+        ), async_mock.patch.object(
+            test_module, "signal", autospec=True
+        ), async_mock.patch.object(
+            test_module,
+            "asyncio",
+            async_mock.MagicMock(
+                get_event_loop=async_mock.MagicMock(
+                    add_signal_handler=async_mock.MagicMock(),
+                    run_until_complete=async_mock.MagicMock(),
+                    close=async_mock.MagicMock(),
+                ),
+                ensure_future=async_mock.MagicMock(
+                    cancel=async_mock.MagicMock(),
+                ),
+                CancelledError=async_mock.MagicMock(),
+            ),
+        ):
+            test_module.init()

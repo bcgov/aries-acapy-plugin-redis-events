@@ -97,7 +97,8 @@ services:
   relay:
     image: redis-relay
     build:
-      context: ../redis_relay
+      context: ..
+      dockerfile: redis_relay/Dockerfile
     ports:
       - 8071:8081
     environment:
@@ -107,27 +108,42 @@ services:
       - STATUS_ENDPOINT_PORT=7001
       - STATUS_ENDPOINT_API_KEY=test_api_key_1
       - INBOUND_TRANSPORT_CONFIG=[["http", "0.0.0.0", "8071"],["ws", "0.0.0.0", "8081"]]
+      - WAIT_BEFORE_HOSTS=15
+      - WAIT_HOSTS=redis-node-3:6379
+      - WAIT_HOSTS_TIMEOUT=120
+      - WAIT_SLEEP_INTERVAL=1
+      - WAIT_HOST_CONNECT_TIMEOUT=60
     depends_on:
       - redis-cluster
-
+    networks:
+      - acapy_default
   deliverer:
     image: redis-deliverer
     build:
-      context: ../redis_deliverer
+      context: ..
+      dockerfile: redis_deliverer/Dockerfile
     environment:
       - REDIS_SERVER_URL=redis://default:test1234@172.28.0.103:6379
       - TOPIC_PREFIX=acapy
       - STATUS_ENDPOINT_HOST=0.0.0.0
       - STATUS_ENDPOINT_PORT=7002
       - STATUS_ENDPOINT_API_KEY=test_api_key_2
+      - WAIT_BEFORE_HOSTS=15
+      - WAIT_HOSTS=redis-node-3:6379
+      - WAIT_HOSTS_TIMEOUT=120
+      - WAIT_SLEEP_INTERVAL=1
+      - WAIT_HOST_CONNECT_TIMEOUT=60
     depends_on:
       - redis-cluster
-
+    networks:
+      - acapy_default
   echo:
     image: dbluhm/echo-agent:6c22a88
     ports:
       - "3002:3002"
     command: --host 0.0.0.0 --port 3002 --log-level debug
+    networks:
+      - acapy_default
 
   #*************************************************************
   # acapy-redis_queue: aca-py that produces redis events.      *
@@ -143,28 +159,27 @@ services:
       - redis-cluster
       - relay
       - deliverer
-    command: it redis_queue.inbound redis 0 -ot redis_queue.outbound -e http://relay:8071 --no-ledger --admin 0.0.0.0 3001 --admin-insecure-mode --plugin redis_queue.events --log-level debug
+    command: start -it redis_queue.inbound redis 0 -ot redis_queue.outbound -e http://relay:8071 --no-ledger --admin 0.0.0.0 3001 --admin-insecure-mode --plugin redis_queue.events --log-level debug
     environment:
-      - WAIT_BEFORE_HOSTS=5
-      - WAIT_HOSTS=redis-node-1:6379, relay:8071, relay:8081
+      - WAIT_BEFORE_HOSTS=15
+      - WAIT_HOSTS=redis-node-3:6379, relay:8071, relay:8081
       - WAIT_HOSTS_TIMEOUT=120
       - WAIT_SLEEP_INTERVAL=1
       - WAIT_HOST_CONNECT_TIMEOUT=60
-
-
+    networks:
+      - acapy_default
   #*************************************************************
   # tester: drives tests in a                                  *
   # "Juggernaut" fashion!                                      *
   #*************************************************************
-
   tests:
       container_name: juggernaut
       build:
         context: .
         dockerfile: Dockerfile.test.runner
       environment:
-        - WAIT_BEFORE_HOSTS=6
-        - WAIT_HOSTS=agent:3001, echo:3002, redis-node-1:6379
+        - WAIT_BEFORE_HOSTS=15
+        - WAIT_HOSTS=echo:3002, agent:3001, redis-node-3:6379
         - WAIT_HOSTS_TIMEOUT=120
         - WAIT_SLEEP_INTERVAL=1
         - WAIT_HOST_CONNECT_TIMEOUT=60
@@ -176,6 +191,8 @@ services:
         - redis-cluster
         - agent
         - echo
+      networks:
+        - acapy_default
 networks:
   acapy_default:
     external: true

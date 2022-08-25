@@ -107,9 +107,10 @@ services:
     ports:
       - "3001:3001"
     depends_on:
-      - redis
+      - redis-node-3:6379
     command: start --arg-file default.yml --plugin redis_queue -e http://acapy-redis-queue:3000 --log-level debug
-    networks: acapy_default
+    networks:
+      - acapy_default
 networks:
     acapy_default:
       external: true

@@ -3,12 +3,12 @@ import aiohttp
 import asyncio
 import base64
 import logging
-import sys
-import urllib
+import signal
 import json
 
+from contextlib import suppress
 from redis.asyncio import RedisCluster
-from redis.exceptions import RedisError
+from redis.exceptions import RedisError, RedisClusterException
 from time import time
 from os import getenv
 
@@ -45,9 +45,10 @@ class Deliverer:
             self.ready = True
             self.running = True
             await asyncio.gather(self.process_delivery(), self.process_retries())
-        except RedisError:
+        except (RedisError, RedisClusterException) as err:
             self.ready = False
             self.running = False
+            logging.error(f"Unable to connect to Redis, {err}")
 
     async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
@@ -57,7 +58,7 @@ class Deliverer:
                 return True
             else:
                 return False
-        except RedisError:
+        except (RedisError, RedisClusterException):
             return False
 
     async def process_delivery(self):
@@ -70,10 +71,10 @@ class Deliverer:
                     try:
                         msg = await self.redis.blpop(self.outbound_topic, 0.2)
                         msg_received = True
-                    except RedisError as err:
+                    except (RedisError, RedisClusterException) as err:
                         await asyncio.sleep(1)
                         logging.exception(
-                            f"Unexpected redis client exception (blpop): {str(err)}"
+                            f"Unexpected redis client exception (blpop): {err}"
                         )
                 if not msg:
                     await asyncio.sleep(1)
@@ -160,11 +161,9 @@ class Deliverer:
                     {retry_msg: retry_time},
                 )
                 zadd_sent = True
-            except RedisError as err:
+            except (RedisError, RedisClusterException) as err:
                 await asyncio.sleep(1)
-                logging.exception(
-                    f"Unexpected redis client exception (zadd): {str(err)}"
-                )
+                logging.exception(f"Unexpected redis client exception (zadd): {err}")
 
     async def process_retries(self):
         """Process retries."""
@@ -181,10 +180,10 @@ class Deliverer:
                         num=10,
                     )
                     zrangebyscore_rec = True
-                except RedisError as err:
+                except (RedisError, RedisClusterException) as err:
                     await asyncio.sleep(1)
                     logging.exception(
-                        f"Unexpected redis client exception (zrangebyscore): {str(err)}"
+                        f"Unexpected redis client exception (zrangebyscore): {err}"
                     )
             if rows:
                 for message in rows:
@@ -196,10 +195,10 @@ class Deliverer:
                                 message,
                             )
                             zrem_rec = True
-                        except RedisError as err:
+                        except (RedisError, RedisClusterException) as err:
                             await asyncio.sleep(1)
                             logging.exception(
-                                f"Unexpected redis client exception (zrem): {str(err)}"
+                                f"Unexpected redis client exception (zrem): {err}"
                             )
                     if count == 0:
                         # message removed by another process
@@ -209,16 +208,16 @@ class Deliverer:
                         try:
                             await self.redis.rpush(self.outbound_topic, message)
                             msg_sent = True
-                        except RedisError as err:
+                        except (RedisError, RedisClusterException) as err:
                             await asyncio.sleep(1)
                             logging.exception(
-                                f"Unexpected redis client exception (rpush): {str(err)}"
+                                f"Unexpected redis client exception (rpush): {err}"
                             )
             else:
                 await asyncio.sleep(self.retry_timedelay_s)
 
 
-def main():
+async def main():
     """Start Delivery service."""
     REDIS_SERVER_URL = getenv("REDIS_SERVER_URL")
     TOPIC_PREFIX = getenv("TOPIC_PREFIX", "acapy")
@@ -227,7 +226,7 @@ def main():
     STATUS_ENDPOINT_API_KEY = getenv("STATUS_ENDPOINT_API_KEY")
     OUTBOUND_TOPIC = f"{TOPIC_PREFIX}_outbound"
     OUTBOUND_RETRY_TOPIC = f"{TOPIC_PREFIX}_outbound-retry"
-
+    tasks = []
     if not REDIS_SERVER_URL:
         raise SystemExit("No Redis host/connection provided.")
     handler = Deliverer(REDIS_SERVER_URL, OUTBOUND_TOPIC, OUTBOUND_RETRY_TOPIC)
@@ -235,15 +234,34 @@ def main():
         "Starting Redis outbound message delivery agent with args: "
         f"{REDIS_SERVER_URL}, {TOPIC_PREFIX}, {OUTBOUND_TOPIC}, {OUTBOUND_RETRY_TOPIC}"
     )
-    asyncio.ensure_future(handler.run())
+    tasks.append(asyncio.ensure_future(handler.run()))
     if STATUS_ENDPOINT_HOST and STATUS_ENDPOINT_PORT and STATUS_ENDPOINT_API_KEY:
-        start_status_endpoints_server(
-            STATUS_ENDPOINT_HOST,
-            STATUS_ENDPOINT_PORT,
-            STATUS_ENDPOINT_API_KEY,
-            [handler],
+        tasks.append(
+            asyncio.ensure_future(
+                start_status_endpoints_server(
+                    STATUS_ENDPOINT_HOST,
+                    STATUS_ENDPOINT_PORT,
+                    STATUS_ENDPOINT_API_KEY,
+                    [handler],
+                )
+            )
         )
+    await asyncio.gather(*tasks)
 
 
-if __name__ == "__main__":
-    main()
+def init():
+    if __name__ == "__main__":
+        loop = asyncio.get_event_loop()
+        main_task = asyncio.ensure_future(main())
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, main_task.cancel)
+
+        try:
+            with suppress(asyncio.CancelledError):
+                loop.run_until_complete(main_task)
+        finally:
+            loop.close()
+
+
+init()

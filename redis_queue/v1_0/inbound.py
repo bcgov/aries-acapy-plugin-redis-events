@@ -100,9 +100,7 @@ class RedisInboundTransport(BaseInboundTransport):
                         LOGGER.warning(err)
                         retry_pop_count = retry_pop_count + 1
                         if retry_pop_count > 5:
-                            raise InboundTransportError(
-                                f"Unexpected exception {str(err)}"
-                            )
+                            raise InboundTransportError(f"Unexpected exception: {err}")
                 if not msg_bytes:
                     await asyncio.sleep(1)
                     continue
@@ -170,7 +168,7 @@ class RedisInboundTransport(BaseInboundTransport):
                                     str.encode(json.dumps(message)),
                                 )
                             except RedisError as err:
-                                LOGGER.exception(f"Unexpected exception {str(err)}")
+                                LOGGER.exception(f"Unexpected exception: {err}")
                 except (MessageParseError, WireFormatParseError):
                     LOGGER.exception("Failed to process message")
                     continue
