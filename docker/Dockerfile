@@ -23,7 +23,7 @@ RUN ln -s $(poetry env info -p)/lib/python3.6/site-packages site-packages
 
 COPY redis_queue redis_queue
 COPY ./docker/default.yml .
-COPY ./docker/plugins-config.yaml .
+COPY ./docker/plugins-config.yml .
 
 ENTRYPOINT ["/bin/sh", "-c", "/wait && poetry run aca-py \"$@\"", "--"]
-CMD ["start",  "--plugin", "redis_queue.events", "--arg-file", "default.yml"]
+CMD ["start",  "--plugin", "redis_queue", "--plugin-config", "plugins-config.yml", "--arg-file", "default.yml"]

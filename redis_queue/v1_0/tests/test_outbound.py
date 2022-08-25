@@ -1,18 +1,12 @@
-import asyncio
 import base64
 import datetime
-import pytest
+import redis
 import time
 import json
-import os
-import string
 
 from aries_cloudagent.core.in_memory import InMemoryProfile
 from aiohttp.test_utils import unused_port
 from asynctest import TestCase as AsyncTestCase, mock as async_mock, PropertyMock
-from redis.asyncio import RedisCluster
-from redis.exceptions import RedisError
-
 
 from .. import outbound as test_outbound
 from .. import utils as test_util
@@ -91,7 +85,7 @@ class TestRedisOutbound(AsyncTestCase):
 
     async def test_init(self):
         self.profile.context.injector.bind_instance(
-            RedisCluster, async_mock.MagicMock()
+            redis.asyncio.RedisCluster, async_mock.MagicMock()
         )
         redis_outbound_inst = RedisOutboundQueue(
             root_profile=self.profile,
@@ -100,6 +94,21 @@ class TestRedisOutbound(AsyncTestCase):
         assert redis_outbound_inst
         await redis_outbound_inst.start()
         await redis_outbound_inst.stop()
+
+    async def test_init_no_bind_instance(self):
+        RedisOutboundQueue.running = PropertyMock(side_effect=[True, True, True, False])
+        with async_mock.patch.object(
+            redis.asyncio.RedisCluster,
+            "from_url",
+            async_mock.MagicMock(),
+        ) as mock_redis:
+            redis_outbound_inst = RedisOutboundQueue(
+                root_profile=self.profile,
+            )
+
+            assert redis_outbound_inst
+            await redis_outbound_inst.start()
+            await redis_outbound_inst.stop()
 
     async def test_get_recip_keys_list_for_uid(self):
         redis = async_mock.MagicMock(
@@ -310,7 +319,7 @@ class TestRedisOutbound(AsyncTestCase):
     async def test_handle_message_x(self):
         self.profile.settings["emit_new_didcomm_mime_type"] = True
         self.profile.context.injector.bind_instance(
-            RedisCluster,
+            redis.asyncio.RedisCluster,
             async_mock.MagicMock(),
         )
         redis_outbound_inst = RedisOutboundQueue(self.profile)
@@ -321,9 +330,9 @@ class TestRedisOutbound(AsyncTestCase):
                 None,
             )
         self.profile.context.injector.bind_instance(
-            RedisCluster,
+            redis.asyncio.RedisCluster,
             async_mock.MagicMock(
-                rpush=async_mock.CoroutineMock(side_effect=RedisError),
+                rpush=async_mock.CoroutineMock(side_effect=redis.exceptions.RedisError),
             ),
         )
         redis_outbound_inst = RedisOutboundQueue(self.profile)
@@ -335,9 +344,9 @@ class TestRedisOutbound(AsyncTestCase):
 
     async def test_handle_message(self):
         self.profile.context.injector.bind_instance(
-            RedisCluster,
+            redis.asyncio.RedisCluster,
             async_mock.MagicMock(
-                rpush=async_mock.CoroutineMock(side_effect=RedisError),
+                rpush=async_mock.CoroutineMock(side_effect=redis.exceptions.RedisError),
             ),
         )
         with async_mock.patch.object(
@@ -363,7 +372,7 @@ class TestRedisOutbound(AsyncTestCase):
     async def test_handle_message_mediator(self):
         self.profile.settings["emit_new_didcomm_mime_type"] = True
         self.profile.context.injector.bind_instance(
-            RedisCluster,
+            redis.asyncio.RedisCluster,
             async_mock.MagicMock(
                 rpush=async_mock.CoroutineMock(),
             ),

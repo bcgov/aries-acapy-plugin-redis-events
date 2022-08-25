@@ -15,6 +15,26 @@ from time import time
 from .. import deliver as test_module
 from ..deliver import Deliverer, main
 
+PAYLOAD_B64 = """
+    eyJwcm90ZWN0ZWQiOiAiZXlKbGJtTWlPaUFpZUdOb1lXTm9ZVEl3Y0c5c2VURXpNRFZmYVdWM
+    FppSXNJQ0owZVhBaU9pQWlTbGROTHpFdU1DSXNJQ0poYkdjaU9pQWlRWFYwYUdOeWVYQjBJaX
+    dnSW5KbFkybHdhV1Z1ZEhNaU9pQmJleUpsYm1OeWVYQjBaV1JmYTJWNUlqb2dJakZqWjNsMFF
+    tMTNNM0V4YUdkaVZ6Qkpiak50U0c4MldXaExUMnRwUnpWRWVUaHJSakpJV2pZeGNUSnZXV00z
+    Ym10dVN6bE9TVWMyU0VobFUyTm9lV0VpTENBaWFHVmhaR1Z5SWpvZ2V5SnJhV1FpT2lBaU5FU
+    kNTalJhY0RnMU1XZHFlazUwU20xdGIwVTVOMWR4Vm5KWFRqTTJlVnBTWVVkcFpqUkJSM0o0ZD
+    FFaUxDQWljMlZ1WkdWeUlqb2dJak5XY0hsU2NVRlpUV3N5Tms1RmMwUXpObU5mWjJnMFZIazB
+    aamd3TUd4RFJHRXdNMWxsUlc1bVJYQm1WMmhKTFdkelpFY3RWR1JrTVdWTmFEbFpTWG8zTkhS
+    RlN6SnNSMVZhVFhwZk5HdDFkMEpUVWtvMFRGOWhkMVJLUVZWVmQydFRWbmhyTXpSblVWVmZOV
+    2RyZDFSa09FWTFUa0ZsU1U1UVZTSXNJQ0pwZGlJNklDSnFWVkpDUW1OaVQzZzNOa05zVmw4eG
+    F6aFJNMjlyVW5KdFJHUTFhM0JwUWlKOWZWMTkiLCAiaXYiOiAiTVdnR3VRNF9ab2dxVVJUbiI
+    sICJjaXBoZXJ0ZXh0IjogIlVNTGFQOU13ZF9wOFR1bWdwcVZWQWZTSWZXc1g3a0lWLUR4Rndf
+    VHRTQ2pWdTVTbG5RYmtkTVJLd3VyZGI1dmd6Q0tUNUFybFV0WEFMMm1sSUlpUGpSYzVmSzhLc
+    013S0dFemkycEtrdmxDN1EzUXRKWTE5WmVTSjlYMGlUOWxOamNEM25KS0o1bzlkSjhVWGZpNU
+    80ZEtaLWxlVy1qOHlzTEFTSTh1eEZYVVNoUmxlNy03bm5HZkZnRlZBRjNaWVpqNlRXUUJrdkd
+    SUk96TzMwTHNEWHBzalNqMWZfd056RWdxTmpPMERZemRKa0lBNm1BQ1AiLCAidGFnIjogImVB
+    ZVFiakktVmpkN21hcWdTNElGTlEifQ==
+"""
+
 test_msg_a = (
     None,
     str.encode(
@@ -264,7 +284,7 @@ class TestRedisHandler(AsyncTestCase):
         with async_mock.patch.object(
             test_module.aiohttp,
             "ClientSession",
-            async_mock.MagicMock(),
+            async_mock.MagicMock(closed=False),
         ) as mock_session, async_mock.patch.object(
             redis.asyncio.RedisCluster,
             "from_url",
@@ -453,3 +473,18 @@ class TestRedisHandler(AsyncTestCase):
             ),
         ):
             test_module.init()
+
+    def test_outbound_payload_data_model(self):
+        test_success_message = {
+            "service": {"url": "http://echo:3002"},
+            "payload": PAYLOAD_B64,
+            "headers": {"Content-Type": "application/ssi-agent-wire"},
+        }
+        test_success_message = str.encode(json.dumps(test_success_message))
+        assert test_module.OutboundPayload.from_bytes(test_success_message)
+        test_fail_message = {
+            "service": {"url": "http://echo:3002/fake/"},
+            "payload": PAYLOAD_B64,
+        }
+        test_fail_message = str.encode(json.dumps(test_fail_message))
+        assert test_module.OutboundPayload.from_bytes(test_fail_message)

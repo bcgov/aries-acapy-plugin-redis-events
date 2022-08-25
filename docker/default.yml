@@ -8,7 +8,7 @@ admin-insecure-mode: true
 plugin:
   - redis_queue
 
-plugin-config: plugins-config.yaml
+plugin-config: plugins-config.yml
 
 # Transport
 inbound-transport:

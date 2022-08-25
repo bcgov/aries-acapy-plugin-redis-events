@@ -3,14 +3,15 @@ import json
 
 from aries_cloudagent.core.in_memory import InMemoryProfile
 from aries_cloudagent.core.event_bus import EventBus, Event, MockEventBus
+from aries_cloudagent.transport.error import TransportError
 from aiohttp.test_utils import unused_port
 from asynctest import TestCase as AsyncTestCase, mock as async_mock, PropertyMock
 from copy import deepcopy
 from redis.asyncio import RedisCluster
 from redis.exceptions import RedisError
 
-from .. import events as test_events
-from ... import config as test_config
+from ..events import setup, on_startup, on_shutdown, handle_event
+from .. import config as test_config
 
 SETTINGS = {
     "plugin_config": {
@@ -77,14 +78,14 @@ class TestRedisEvents(AsyncTestCase):
         context = async_mock.MagicMock(
             settings=SETTINGS, inject=async_mock.MagicMock(return_value=MockEventBus())
         )
-        await test_events.setup(context)
+        await setup(context)
 
     async def test_setup_x(self):
         context = async_mock.MagicMock(
             settings=SETTINGS, inject=async_mock.MagicMock(return_value=None)
         )
         with self.assertRaises(ValueError):
-            await test_events.setup(context)
+            await setup(context)
 
     async def test_on_startup(self):
         self.profile.settings["plugin_config"] = SETTINGS["plugin_config"]
@@ -94,7 +95,7 @@ class TestRedisEvents(AsyncTestCase):
             "from_url",
             async_mock.MagicMock(),
         ):
-            await test_events.on_startup(self.profile, test_event)
+            await on_startup(self.profile, test_event)
 
     async def test_on_startup_x(self):
         self.profile.settings["plugin_config"] = SETTINGS["plugin_config"]
@@ -104,13 +105,13 @@ class TestRedisEvents(AsyncTestCase):
             "from_url",
             async_mock.MagicMock(side_effect=redis.exceptions.RedisError),
         ):
-            with self.assertRaises(test_events.TransportError):
-                await test_events.on_startup(self.profile, test_event)
+            with self.assertRaises(TransportError):
+                await on_startup(self.profile, test_event)
 
     async def test_on_shutddown(self):
         self.profile.settings["plugin_config"] = SETTINGS["plugin_config"]
         test_event = Event("test_topic", {"rev_reg_id": "mock", "crids": ["mock"]})
-        await test_events.on_shutdown(self.profile, test_event)
+        await on_shutdown(self.profile, test_event)
 
     async def test_handle_event(self):
         self.profile.settings["emit_new_didcomm_mime_type"] = True
@@ -131,7 +132,7 @@ class TestRedisEvents(AsyncTestCase):
                 pattern=async_mock.MagicMock(pattern="acapy::basicmessage::received")
             ),
         )
-        await test_events.handle_event(self.profile, test_event_with_metadata)
+        await handle_event(self.profile, test_event_with_metadata)
 
     async def test_handle_event_deliver_webhook(self):
         test_settings = deepcopy(SETTINGS)
@@ -161,7 +162,7 @@ class TestRedisEvents(AsyncTestCase):
                 pattern=async_mock.MagicMock(pattern="acapy::basicmessage::received")
             ),
         )
-        await test_events.handle_event(self.profile, test_event_with_metadata)
+        await handle_event(self.profile, test_event_with_metadata)
 
     async def test_handle_event_x(self):
         self.profile.settings["emit_new_didcomm_mime_type"] = False
@@ -181,4 +182,4 @@ class TestRedisEvents(AsyncTestCase):
                 pattern=async_mock.MagicMock(pattern="acapy::basicmessage::received")
             ),
         )
-        await test_events.handle_event(self.profile, test_event_with_metadata)
+        await handle_event(self.profile, test_event_with_metadata)

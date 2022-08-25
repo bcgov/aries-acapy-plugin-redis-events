@@ -791,7 +791,7 @@ email = ["email-validator (>=1.0.3)"]
 
 [[package]]
 name = "pydid"
-version = "0.3.5"
+version = "0.3.6"
 description = "Python library for validating, constructing, and representing DIDs and DID Documents"
 category = "main"
 optional = false
@@ -2076,8 +2076,8 @@ pydantic = [
     {file = "pydantic-1.9.2.tar.gz", hash = "sha256:8cb0bc509bfb71305d7a59d00163d5f9fc4530f0881ea32c74ff4f74c85f3d3d"},
 ]
 pydid = [
-    {file = "pydid-0.3.5-py3-none-any.whl", hash = "sha256:5ec5fc007b86774c41de61461ac897c78e5eb540d049d1ee1bb1f2b1d92cdb5e"},
-    {file = "pydid-0.3.5.tar.gz", hash = "sha256:c15b03303b7720a5199975e0aadf3f534347ec735c005a1b0b697c2563a09438"},
+    {file = "pydid-0.3.6-py3-none-any.whl", hash = "sha256:d2425d35ae2457cd73921af9b0e8a4970535e363382c9226cd463a0f93b23600"},
+    {file = "pydid-0.3.6.tar.gz", hash = "sha256:bfeef3c577833d46fb33183bb4bc266d2543deb48e05c267080f8bd89981ea2f"},
 ]
 pyflakes = [
     {file = "pyflakes-2.3.1-py2.py3-none-any.whl", hash = "sha256:7893783d01b8a89811dd72d7dfd4d84ff098e5eed95cfa8905b22bbffe52efc3"},

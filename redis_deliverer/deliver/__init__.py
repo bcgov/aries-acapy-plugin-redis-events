@@ -5,7 +5,22 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, PrivateAttr, validator
 
 
-class RedisQueuePayload(BaseModel):
+class NoneDefaultModel(BaseModel):
+    @validator("*", pre=True)
+    def not_none(cls, v, field):
+        if all(
+            (
+                # Cater for the occasion where field.default in (0, False)
+                getattr(field, "default", None) is not None,
+                v is None,
+            )
+        ):
+            return field.default
+        else:
+            return v
+
+
+class RedisQueuePayload(NoneDefaultModel):
     class Config:
         json_encoders = {bytes: lambda v: base64.urlsafe_b64encode(v).decode()}
 
@@ -25,9 +40,8 @@ class Service(BaseModel):
 class OutboundPayload(RedisQueuePayload):
     service: Service
     payload: bytes
-    headers: dict
+    headers: dict = {}
     retries: int = 0
-
     _endpoint_scheme: str = PrivateAttr()
 
     def __init__(self, **data):

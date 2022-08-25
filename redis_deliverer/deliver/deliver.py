@@ -83,7 +83,7 @@ class Deliverer:
                 headers = msg.headers
                 endpoint = msg.service.url
                 payload = msg.payload
-                endpoint_scheme = msg._endpoint_scheme
+                endpoint_scheme = msg.endpoint_scheme
                 if endpoint_scheme == "http" or endpoint_scheme == "https":
                     session_args = {
                         "cookie_jar": aiohttp.DummyCookieJar(),
@@ -91,23 +91,23 @@ class Deliverer:
                         "trust_env": True,
                     }
                     client_session = aiohttp.ClientSession(**session_args)
-                    logging.info(f"Dispatch message to {endpoint}")
                     failed = False
                     try:
                         response = await client_session.post(
                             endpoint, data=payload, headers=headers, timeout=10
                         )
-                    except aiohttp.ClientError:
-                        failed = True
-                    except asyncio.TimeoutError:
-                        failed = True
-                    else:
                         if response.status < 200 or response.status >= 300:
                             logging.error(
                                 f"Invalid response : {response.status} - "
                                 f"{response.reason}"
                             )
                             failed = True
+                    except aiohttp.ClientError:
+                        failed = True
+                    except asyncio.TimeoutError:
+                        failed = True
+                    finally:
+                        await client_session.close()
                     if failed:
                         logging.exception(f"Delivery failed for {endpoint}")
                         retries = msg.retries or 0
@@ -124,6 +124,8 @@ class Deliverer:
                             )
                         else:
                             logging.error(f"Exceeded max retries for {str(endpoint)}")
+                    else:
+                        logging.info(f"Message dispatched to {endpoint}")
                 elif endpoint_scheme == "ws":
                     session_args = {
                         "cookie_jar": aiohttp.DummyCookieJar(),
@@ -137,10 +139,11 @@ class Deliverer:
                             await ws.send_bytes(payload)
                         else:
                             await ws.send_str(payload)
+                        logging.info(f"WS message dispatched to {endpoint}")
                 else:
                     logging.error(f"Unsupported scheme: {endpoint_scheme}")
         finally:
-            if client_session:
+            if client_session and not client_session.closed:
                 await client_session.close()
 
     async def add_retry(self, message: dict):
@@ -225,7 +228,7 @@ async def main():
     STATUS_ENDPOINT_PORT = getenv("STATUS_ENDPOINT_PORT")
     STATUS_ENDPOINT_API_KEY = getenv("STATUS_ENDPOINT_API_KEY")
     OUTBOUND_TOPIC = f"{TOPIC_PREFIX}_outbound"
-    OUTBOUND_RETRY_TOPIC = f"{TOPIC_PREFIX}_outbound-retry"
+    OUTBOUND_RETRY_TOPIC = f"{TOPIC_PREFIX}_outbound_retry"
     tasks = []
     if not REDIS_SERVER_URL:
         raise SystemExit("No Redis host/connection provided.")

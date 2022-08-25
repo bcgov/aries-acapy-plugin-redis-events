@@ -159,7 +159,7 @@ services:
       - redis-cluster
       - relay
       - deliverer
-    command: start -it redis_queue.inbound redis 0 -ot redis_queue.outbound -e http://relay:8071 --no-ledger --admin 0.0.0.0 3001 --admin-insecure-mode --plugin redis_queue.events --log-level debug
+    command: start -it redis_queue.v1_0.inbound redis 0 -ot redis_queue.v1_0.outbound -e http://relay:8071 --no-ledger --admin 0.0.0.0 3001 --admin-insecure-mode --plugin redis_queue.v1_0.events --log-level debug
     environment:
       - WAIT_BEFORE_HOSTS=15
       - WAIT_HOSTS=redis-node-3:6379, relay:8071, relay:8081

@@ -1,16 +1,11 @@
 """Basic in memory queue."""
-import asyncio
 import base64
 import json
 
-from aries_cloudagent.core.profile import Profile
-from .config import OutboundConfig
 import logging
 from typing import List, Optional, Union
-from .utils import (
-    process_payload_recip_key,
-)
 
+from aries_cloudagent.core.profile import Profile
 from aries_cloudagent.transport.outbound.base import (
     BaseOutboundTransport,
     OutboundTransportError,
@@ -21,11 +16,12 @@ from aries_cloudagent.transport.wire_format import (
 )
 
 from redis.asyncio import RedisCluster
-from redis.exceptions import RedisError
-from uuid import uuid4
+from redis.exceptions import RedisError, RedisClusterException
 
-from . import get_config
-
+from .config import OutboundConfig, ConnectionConfig, get_config
+from .utils import (
+    process_payload_recip_key,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,8 +30,8 @@ class RedisOutboundQueue(BaseOutboundTransport):
     """Redis queue implementation class."""
 
     DEFAULT_OUTBOUND_TOPIC = "acapy_outbound"
-    schemes = "redis"
-    is_external = False
+    schemes = ("redis",)
+    is_external = True
 
     def __init__(self, root_profile: Profile):
         """Initialize base queue type."""
@@ -47,9 +43,15 @@ class RedisOutboundQueue(BaseOutboundTransport):
         LOGGER.info(
             f"Setting up redis outbound queue with configuration: {self.outbound_config}"
         )
-        self.redis = root_profile.inject(RedisCluster)
+        self.redis = root_profile.inject_or(RedisCluster)
         self.is_mediator = self.outbound_config.mediator_mode
         self.outbound_topic = self.outbound_config.acapy_outbound_topic
+        if not self.redis:
+            self.connection_url = (
+                get_config(root_profile.context.settings).connection
+                or ConnectionConfig.default()
+            ).connection_url
+            self.redis = RedisCluster.from_url(url=self.connection_url)
 
     async def start(self):
         """Start the queue."""
@@ -101,5 +103,5 @@ class RedisOutboundQueue(BaseOutboundTransport):
                 topic,
                 message,
             )
-        except RedisError:
-            LOGGER.exception("Error while pushing to Redis")
+        except (RedisError, RedisClusterException) as err:
+            LOGGER.exception(f"Error while pushing to Redis: {err}")

@@ -26,7 +26,7 @@ from .utils import (
     b64_to_bytes,
 )
 
-from .config import get_config, InboundConfig
+from .config import get_config, InboundConfig, ConnectionConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,13 +49,19 @@ class RedisInboundTransport(BaseInboundTransport):
         super().__init__("redis", create_session, **kwargs)
         self.host = host
         self.port = port
-        self.inbcound_config = (
+        self.inbound_config = (
             get_config(self.root_profile.context.settings).inbound
             or InboundConfig.default()
         )
-        self.redis = self.root_profile.inject(RedisCluster)
-        self.inbound_topic = self.inbcound_config.acapy_inbound_topic
-        self.direct_response_topic = self.inbcound_config.acapy_direct_resp_topic
+        self.redis = self.root_profile.inject_or(RedisCluster)
+        self.inbound_topic = self.inbound_config.acapy_inbound_topic
+        self.direct_response_topic = self.inbound_config.acapy_direct_resp_topic
+        if not self.redis:
+            self.connection_url = (
+                get_config(self.root_profile.context.settings).connection
+                or ConnectionConfig.default()
+            ).connection_url
+            self.redis = RedisCluster.from_url(url=self.connection_url)
 
     async def start(self):
         plugin_uid = str(uuid4()).encode("utf-8")

@@ -42,7 +42,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 testpaths = [
     "redis_queue/v1_0/tests",
-    "redis_queue/v1_0/events/tests",
     "redis_deliverer/deliver/tests",
     "redis_relay/relay/tests",
 ]
