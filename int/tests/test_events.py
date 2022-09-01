@@ -60,7 +60,7 @@ async def test_outbound_queue(backchannel: Client, connection_id: str, redis):
         conn_id=connection_id,
         json_body=SendMessage(content="test"),
     )
-    msg = await redis.blpop("acapy_outbound")
+    msg = await redis.blpop("acapy_outbound", 30)
     assert msg
 
 
@@ -106,5 +106,5 @@ async def test_deliverer_retry_on_failure(
         conn_id=connection_id,
         json_body=SendMessage(content="test2"),
     )
-    msg = await redis.blpop("acapy_outbound")
+    msg = await redis.blpop("acapy_outbound", 30)
     assert msg
