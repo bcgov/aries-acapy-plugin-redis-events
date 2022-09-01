@@ -49,7 +49,7 @@ class Relay:
     async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
         try:
-            await self.redis.ping()
+            await self.redis.ping(target_nodes=RedisCluster.PRIMARIES)
             if self.running:
                 return True
             else:
@@ -376,7 +376,7 @@ async def main():
         raise SystemExit("No Redis host/connection provided.")
     if not INBOUND_TRANSPORT_CONFIG:
         raise SystemExit("No inbound transport config provided.")
-    INBOUND_MSG_TOPIC = f"{TOPIC_PREFIX}_inbound_message"
+    INBOUND_MSG_TOPIC = f"{TOPIC_PREFIX}_inbound"
     INBOUND_MSG_DIRECT_RESP = f"{TOPIC_PREFIX}_inbound_direct_response"
     handlers = []
     tasks = []

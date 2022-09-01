@@ -93,7 +93,9 @@ class TestRedisEvents(AsyncTestCase):
         with async_mock.patch.object(
             redis.asyncio.RedisCluster,
             "from_url",
-            async_mock.MagicMock(),
+            async_mock.MagicMock(
+                return_value=async_mock.MagicMock(ping=async_mock.CoroutineMock())
+            ),
         ):
             await on_startup(self.profile, test_event)
 

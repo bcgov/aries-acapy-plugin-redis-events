@@ -40,13 +40,20 @@ RECORD_RE = re.compile(r"acapy::record::([^:]*)(?:::(.*))?")
 WEBHOOK_RE = re.compile(r"acapy::webhook::{.*}")
 
 
-async def on_startup(profile: Profile, event: Event):
+async def redis_setup(profile: Profile, event: Event) -> RedisCluster:
+    """Connect, setup and return the Redis instance."""
     connection_url = (get_config(profile.settings).connection).connection_url
     try:
         redis = RedisCluster.from_url(url=connection_url)
+        await redis.ping(target_nodes=RedisCluster.PRIMARIES)
+        profile.context.injector.bind_instance(RedisCluster, redis)
     except (RedisError, RedisClusterException) as err:
         raise TransportError(f"No Redis instance setup, {err}")
-    profile.context.injector.bind_instance(RedisCluster, redis)
+    return redis
+
+
+async def on_startup(profile: Profile, event: Event):
+    await redis_setup(profile, event)
 
 
 async def on_shutdown(profile: Profile, event: Event):
@@ -63,7 +70,9 @@ def _derive_category(topic: str):
 
 async def handle_event(profile: Profile, event: EventWithMetadata):
     """Push events from aca-py events."""
-    redis = profile.inject(RedisCluster)
+    redis = profile.inject_or(RedisCluster)
+    if not redis:
+        redis = await redis_setup(profile, event)
 
     LOGGER.info("Handling event: %s", event)
     wallet_id = cast(Optional[str], profile.settings.get("wallet.id"))

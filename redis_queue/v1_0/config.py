@@ -1,8 +1,7 @@
 """Redis Queue configuration."""
 
 import logging
-from multiprocessing import connection
-from typing import Any, List, Mapping, Optional, Union
+from typing import Any, Mapping, Optional
 from pydantic import BaseModel, validator
 
 

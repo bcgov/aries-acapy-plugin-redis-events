@@ -6,6 +6,7 @@ import pytest
 from acapy_client import Client
 from acapy_client.api.basicmessage import send_basicmessage
 from acapy_client.models.send_message import SendMessage
+from acapy_client.models import ConnectionStaticResult
 from echo_agent.client import EchoClient
 from echo_agent.models import ConnectionInfo
 
@@ -30,19 +31,26 @@ PAYLOAD_B64 = """
 """
 
 
-# @pytest.mark.asyncio
-# async def test_event_pushed_to_redis(
-#     connection: ConnectionInfo, echo: EchoClient, redis
-# ):
-#     await echo.send_message(
-#         connection,
-#         {
-#             "@type": "https://didcomm.org/basicmessage/1.0/message",
-#             "content": "Your hovercraft is full of eels.",
-#         },
-#     )
-#     msg = await redis.blpop("acapy-basicmessage-received", 35)
-#     assert msg
+@pytest.mark.asyncio
+async def test_event_pushed_to_redis(
+    agent_connection: ConnectionStaticResult, echo: EchoClient, suite_seed: str, redis
+):
+    conn = await echo.new_connection(
+        seed=suite_seed,
+        endpoint=agent_connection.my_endpoint,
+        their_vk=agent_connection.my_verkey,
+    )
+    assert conn
+    assert await redis.blpop("acapy-record-base", 10)
+    assert await redis.blpop("acapy-record-with-state-base", 10)
+    # await echo.send_message(
+    #     conn,
+    #     {
+    #         "@type": "https://didcomm.org/basicmessage/1.0/message",
+    #         "content": "Your hovercraft is full of eels.",
+    #     },
+    # )
+    # assert await redis.blpop("acapy-basicmessage-received", 10)
 
 
 @pytest.mark.asyncio

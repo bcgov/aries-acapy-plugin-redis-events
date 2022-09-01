@@ -148,7 +148,7 @@ async def connection(
 
 
 @pytest.fixture
-def redis():
+async def redis():
     redis = RedisCluster.from_url(url="redis://default:test1234@172.28.0.103:6379")
-
     yield redis
+    await redis.close()
