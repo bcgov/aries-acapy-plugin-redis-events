@@ -106,5 +106,5 @@ async def test_deliverer_retry_on_failure(
         conn_id=connection_id,
         json_body=SendMessage(content="test2"),
     )
-    msg = await redis.blpop("acapy_outbound", 10)
+    msg = await redis.blpop("acapy_outbound")
     assert msg

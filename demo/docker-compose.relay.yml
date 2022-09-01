@@ -138,6 +138,9 @@ services:
     build:
       context: ..
       dockerfile: redis_relay/Dockerfile
+    ports:
+      - 7001:7001
+      - 80:80
     environment:
       - REDIS_SERVER_URL=redis://default:test1234@172.28.0.103:6379
       - TOPIC_PREFIX=acapy
@@ -161,6 +164,8 @@ services:
     build:
       context: ..
       dockerfile: redis_deliverer/Dockerfile
+    ports:
+      - 7002:7002
     environment:
       - REDIS_SERVER_URL=redis://default:test1234@172.28.0.103:6379
       - TOPIC_PREFIX=acapy
