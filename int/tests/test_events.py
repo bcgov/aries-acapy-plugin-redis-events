@@ -9,6 +9,8 @@ from acapy_client.models.send_message import SendMessage
 from acapy_client.models import ConnectionStaticResult
 from echo_agent.client import EchoClient
 from echo_agent.models import ConnectionInfo
+from redis.asyncio import RedisCluster
+from redis.exceptions import RedisClusterException, RedisError
 
 PAYLOAD_B64 = """
     eyJwcm90ZWN0ZWQiOiAiZXlKbGJtTWlPaUFpZUdOb1lXTm9ZVEl3Y0c5c2VURXpNRFZmYVdWM
@@ -60,7 +62,24 @@ async def test_outbound_queue(backchannel: Client, connection_id: str, redis):
         conn_id=connection_id,
         json_body=SendMessage(content="test"),
     )
-    msg = await redis.blpop("acapy_outbound", 30)
+    msg_received = False
+    retry_action = False
+    retry_pop_count = 0
+    while not msg_received:
+        try:
+            msg = await redis.blpop("acapy_outbound", 0.2)
+            if msg:
+                msg_received = True
+                retry_pop_count = 0
+            else:
+                retry_action = True
+        except (RedisError, RedisClusterException):
+            retry_action = True
+        if retry_action:
+            await asyncio.sleep(1)
+            retry_pop_count = retry_pop_count + 1
+        if retry_pop_count > 10:
+            raise Exception("blpop call failed to retrieve message")
     assert msg
 
 
@@ -106,5 +125,22 @@ async def test_deliverer_retry_on_failure(
         conn_id=connection_id,
         json_body=SendMessage(content="test2"),
     )
-    msg = await redis.blpop("acapy_outbound", 30)
+    msg_received = False
+    retry_action = False
+    retry_pop_count = 0
+    while not msg_received:
+        try:
+            msg = await redis.blpop("acapy_outbound", 0.2)
+            if msg:
+                msg_received = True
+                retry_pop_count = 0
+            else:
+                retry_action = True
+        except (RedisError, RedisClusterException):
+            retry_action = True
+        if retry_action:
+            await asyncio.sleep(1)
+            retry_pop_count = retry_pop_count + 1
+        if retry_pop_count > 10:
+            raise Exception("blpop call failed to retrieve message")
     assert msg

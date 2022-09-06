@@ -17,7 +17,7 @@ from aries_cloudagent.transport.wire_format import (
     DIDCOMM_V1_MIME_TYPE,
 )
 from redis.asyncio import RedisCluster
-from redis.exceptions import RedisError
+from redis.exceptions import RedisError, RedisClusterException
 
 from .utils import (
     str_to_datetime,
@@ -93,24 +93,29 @@ class RedisInboundTransport(BaseInboundTransport):
                 continue
             for recip_key in inbound_msg_keys_set:
                 msg_received = False
+                retry_action = False
                 retry_pop_count = 0
                 while not msg_received:
                     try:
-                        msg_bytes = await self.redis.blpop(
+                        msg = await self.redis.blpop(
                             f"{self.inbound_topic}_{recip_key}", 0.2
                         )
-                        msg_received = True
-                        retry_pop_count = 0
-                    except RedisError as err:
+                        if msg:
+                            msg_received = True
+                            retry_pop_count = 0
+                        else:
+                            retry_action = True
+                    except (RedisError, RedisClusterException) as err:
+                        retry_action = True
+                        redis_error = err
+                    if retry_action:
                         await asyncio.sleep(1)
-                        LOGGER.warning(err)
                         retry_pop_count = retry_pop_count + 1
-                        if retry_pop_count > 5:
-                            raise InboundTransportError(f"Unexpected exception: {err}")
-                if not msg_bytes:
-                    await asyncio.sleep(1)
-                    continue
-                msg_bytes = msg_bytes[1]
+                    if retry_pop_count > 5:
+                        raise InboundTransportError(
+                            f"Unexpected exception: {redis_error}"
+                        )
+                msg_bytes = msg[1]
                 try:
                     inbound = json.loads(msg_bytes)
                     payload = base64.urlsafe_b64decode(inbound["payload"])
@@ -161,7 +166,6 @@ class RedisInboundTransport(BaseInboundTransport):
                                 else:
                                     response_data["content-type"] = "application/json"
                                     response = response.encode("utf-8")
-
                             response_data["response"] = base64.urlsafe_b64encode(
                                 response
                             ).decode()

@@ -22,6 +22,7 @@ EVENT_TOPIC_MAP = {
     "acapy::revocation-notification::received": "acapy-revocation-notification-received",
     "acapy::revocation-notification-v2::received": "acapy-revocation-notification-v2-received",
     "acapy::forward::received": "acapy-forward-received",
+    "acapy::outbound-message::queued_for_delivery": "acapy-outbound-message-queued-for-delivery",
 }
 
 EVENT_WEBHOOK_TOPIC_MAP = {

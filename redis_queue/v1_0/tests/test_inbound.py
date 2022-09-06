@@ -162,8 +162,10 @@ class TestRedisInbound(AsyncTestCase):
             redis.asyncio.RedisCluster,
             async_mock.MagicMock(
                 hset=async_mock.CoroutineMock(),
+                ping=async_mock.CoroutineMock(),
                 hget=async_mock.CoroutineMock(
                     side_effect=[
+                        None,
                         base64.urlsafe_b64encode(
                             json.dumps(
                                 [
@@ -177,6 +179,7 @@ class TestRedisInbound(AsyncTestCase):
                         b"1",
                         b"2",
                         b"1",
+                        None,
                         base64.urlsafe_b64encode(
                             json.dumps(
                                 [
@@ -192,17 +195,17 @@ class TestRedisInbound(AsyncTestCase):
                         b"1",
                         b"2",
                         b"3",
-                        None,
                     ]
                 ),
                 blpop=async_mock.CoroutineMock(
                     side_effect=[
+                        None,
                         (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
                         (None, TEST_INBOUND_MSG_A),
                         (None, TEST_INBOUND_MSG_B),
+                        (None, TEST_INBOUND_MSG_C),
                         (None, TEST_INBOUND_INVALID),
                         (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
-                        None,
                         (None, TEST_INBOUND_MSG_B),
                         (None, TEST_INBOUND_MSG_C),
                         (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
@@ -252,6 +255,7 @@ class TestRedisInbound(AsyncTestCase):
             redis.asyncio.RedisCluster,
             async_mock.MagicMock(
                 hset=async_mock.CoroutineMock(),
+                ping=async_mock.CoroutineMock(),
                 hget=async_mock.CoroutineMock(
                     side_effect=[
                         redis.exceptions.RedisError,

@@ -5,7 +5,7 @@ import logging
 import base64
 import re
 from string import Template
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 from aries_cloudagent.core.event_bus import Event, EventBus, EventWithMetadata
 from aries_cloudagent.core.profile import Profile
@@ -45,7 +45,6 @@ async def redis_setup(profile: Profile, event: Event) -> RedisCluster:
     connection_url = (get_config(profile.settings).connection).connection_url
     try:
         redis = RedisCluster.from_url(url=connection_url)
-        await redis.ping(target_nodes=RedisCluster.PRIMARIES)
         profile.context.injector.bind_instance(RedisCluster, redis)
     except (RedisError, RedisClusterException) as err:
         raise TransportError(f"No Redis instance setup, {err}")
@@ -68,6 +67,15 @@ def _derive_category(topic: str):
         return "webhook"
 
 
+def process_event_payload(event_payload: Any):
+    processed_event_payload = None
+    if isinstance(event_payload, dict):
+        processed_event_payload = event_payload
+    elif isinstance(event_payload, str):
+        processed_event_payload = json.loads(event_payload)
+    return processed_event_payload
+
+
 async def handle_event(profile: Profile, event: EventWithMetadata):
     """Push events from aca-py events."""
     redis = profile.inject_or(RedisCluster)
@@ -76,12 +84,18 @@ async def handle_event(profile: Profile, event: EventWithMetadata):
 
     LOGGER.info("Handling event: %s", event)
     wallet_id = cast(Optional[str], profile.settings.get("wallet.id"))
+    event_payload = process_event_payload(event.payload)
+    if not event_payload:
+        try:
+            event_payload = event.payload.serialize()
+        except AttributeError:
+            event_payload = process_event_payload(event.payload.payload)
     payload = {
         "wallet_id": wallet_id or "base",
-        "state": event.payload.get("state"),
+        "state": event_payload.get("state"),
         "topic": event.topic,
         "category": _derive_category(event.topic),
-        "payload": event.payload,
+        "payload": event_payload,
     }
     webhook_urls = profile.settings.get("admin.webhook_urls")
     try:

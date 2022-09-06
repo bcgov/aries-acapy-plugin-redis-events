@@ -201,7 +201,11 @@ class TestRedisHTTPHandler(AsyncTestCase):
         with async_mock.patch.object(
             redis.asyncio.RedisCluster,
             "from_url",
-            async_mock.MagicMock(),
+            async_mock.MagicMock(
+                return_value=async_mock.MagicMock(
+                    ping=async_mock.CoroutineMock(),
+                )
+            ),
         ) as mock_redis, async_mock.patch.object(
             test_module.web,
             "TCPSite",
@@ -242,6 +246,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
                     (None, test_retry_msg_d),
                 ]
             )
+            mock_redis.ping = async_mock.CoroutineMock()
             sentinel = PropertyMock(side_effect=[True, True, True, True, True, False])
             HttpRelay.running = sentinel
             service = HttpRelay(
@@ -602,6 +607,7 @@ class TestRedisWSHandler(AsyncTestCase):
                     (None, test_retry_msg_d),
                 ]
             )
+            mock_redis.ping = async_mock.CoroutineMock()
             sentinel = PropertyMock(side_effect=[True, True, True, True, False])
             WSRelay.running = sentinel
             service = WSRelay(

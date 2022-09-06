@@ -85,7 +85,10 @@ class TestRedisOutbound(AsyncTestCase):
 
     async def test_init(self):
         self.profile.context.injector.bind_instance(
-            redis.asyncio.RedisCluster, async_mock.MagicMock()
+            redis.asyncio.RedisCluster,
+            async_mock.MagicMock(
+                ping=async_mock.CoroutineMock(),
+            ),
         )
         redis_outbound_inst = RedisOutboundQueue(
             root_profile=self.profile,
@@ -100,7 +103,11 @@ class TestRedisOutbound(AsyncTestCase):
         with async_mock.patch.object(
             redis.asyncio.RedisCluster,
             "from_url",
-            async_mock.MagicMock(),
+            async_mock.MagicMock(
+                return_value=async_mock.MagicMock(
+                    ping=async_mock.CoroutineMock(),
+                )
+            ),
         ) as mock_redis:
             redis_outbound_inst = RedisOutboundQueue(
                 root_profile=self.profile,

@@ -2,7 +2,9 @@ import redis
 import json
 
 from aries_cloudagent.core.in_memory import InMemoryProfile
-from aries_cloudagent.core.event_bus import EventBus, Event, MockEventBus
+from aries_cloudagent.core.event_bus import EventWithMetadata, Event, MockEventBus
+from aries_cloudagent.connections.models.connection_target import ConnectionTarget
+from aries_cloudagent.transport.outbound.message import OutboundMessage
 from aries_cloudagent.transport.error import TransportError
 from aiohttp.test_utils import unused_port
 from asynctest import TestCase as AsyncTestCase, mock as async_mock, PropertyMock
@@ -10,8 +12,15 @@ from copy import deepcopy
 from redis.asyncio import RedisCluster
 from redis.exceptions import RedisError
 
-from ..events import setup, on_startup, on_shutdown, handle_event
-from .. import config as test_config
+from ..events import (
+    setup,
+    on_startup,
+    on_shutdown,
+    handle_event,
+    redis_setup,
+    process_event_payload,
+)
+from .. import events as test_module
 
 SETTINGS = {
     "plugin_config": {
@@ -135,6 +144,37 @@ class TestRedisEvents(AsyncTestCase):
             ),
         )
         await handle_event(self.profile, test_event_with_metadata)
+        real_event_with_metadata = EventWithMetadata(
+            topic="acapy::outbound-message::queued_for_delivery",
+            payload=OutboundMessage(
+                connection_id="503a4f71-89f1-4bb2-b20d-e74c685ba325",
+                enc_payload=None,
+                endpoint=None,
+                payload='{"@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message", "@id": "99bf771c-93e4-4482-8ab9-45080927f67c", "content": "test", "sent_time": "2022-09-01T20:15:23.719131Z"}',
+                reply_session_id=None,
+                reply_thread_id="99bf771c-93e4-4482-8ab9-45080927f67c",
+                reply_to_verkey=None,
+                reply_from_verkey=None,
+                target=None,
+                target_list=[
+                    ConnectionTarget(
+                        did="6tb9bVM3SzFRMRxoWJTvp1",
+                        endpoint="http://echo:3002",
+                        label="test-runner",
+                        recipient_keys=["4DBJ4Zp851gjzNtJmmoE97WqVrWN36yZRaGif4AGrxwQ"],
+                        routing_keys=[],
+                        sender_key="4DBJ4Zp851gjzNtJmmoE97WqVrWN36yZRaGif4AGrxwQ",
+                    )
+                ],
+                to_session_only=False,
+            ),
+            metadata=async_mock.MagicMock(
+                pattern=async_mock.MagicMock(
+                    pattern="acapy::outbound-message::queued_for_delivery"
+                )
+            ),
+        )
+        await handle_event(self.profile, real_event_with_metadata)
 
     async def test_handle_event_deliver_webhook(self):
         test_settings = deepcopy(SETTINGS)
@@ -168,20 +208,40 @@ class TestRedisEvents(AsyncTestCase):
 
     async def test_handle_event_x(self):
         self.profile.settings["emit_new_didcomm_mime_type"] = False
-        self.profile.context.injector.bind_instance(
-            RedisCluster,
-            async_mock.MagicMock(
-                rpush=async_mock.CoroutineMock(side_effect=redis.exceptions.RedisError),
+        with async_mock.patch.object(
+            test_module,
+            "redis_setup",
+            async_mock.CoroutineMock(
+                return_value=async_mock.MagicMock(
+                    rpush=async_mock.CoroutineMock(
+                        side_effect=redis.exceptions.RedisError
+                    ),
+                )
             ),
+        ):
+            test_event_with_metadata = async_mock.MagicMock(
+                payload={
+                    "state": "test_state",
+                    "test": "test",
+                },
+                topic="acapy::basicmessage::received",
+                metadata=async_mock.MagicMock(
+                    pattern=async_mock.MagicMock(
+                        pattern="acapy::basicmessage::received"
+                    )
+                ),
+            )
+            await handle_event(self.profile, test_event_with_metadata)
+
+    def test_process_event_payload(self):
+        assert process_event_payload(
+            {
+                "@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message",
+                "@id": "bd9f3856-140c-4e9a-afc7-cc49936e4bc9",
+                "content": "test2",
+                "sent_time": "2022-09-01T20:15:59.671701Z",
+            }
         )
-        test_event_with_metadata = async_mock.MagicMock(
-            payload={
-                "state": "test_state",
-                "test": "test",
-            },
-            topic="acapy::basicmessage::received",
-            metadata=async_mock.MagicMock(
-                pattern=async_mock.MagicMock(pattern="acapy::basicmessage::received")
-            ),
+        assert process_event_payload(
+            '{"@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message", "@id": "bd9f3856-140c-4e9a-afc7-cc49936e4bc9", "content": "test2", "sent_time": "2022-09-01T20:15:59.671701Z"}'
         )
-        await handle_event(self.profile, test_event_with_metadata)

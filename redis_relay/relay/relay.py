@@ -49,7 +49,6 @@ class Relay:
     async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
         try:
-            await self.redis.ping(target_nodes=RedisCluster.PRIMARIES)
             if self.running:
                 return True
             else:

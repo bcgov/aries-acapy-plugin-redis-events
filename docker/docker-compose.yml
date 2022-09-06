@@ -96,7 +96,7 @@ services:
           ipv4_address: 172.28.0.106
 
   #*************************************************************
-  # acapy-redis_queue     *
+  # acapy-redis_queue: aca-py that produces redis events. *
   #*************************************************************
 
   acapy-redis-queue:

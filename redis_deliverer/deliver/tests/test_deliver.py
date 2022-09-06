@@ -369,6 +369,7 @@ class TestRedisHandler(AsyncTestCase):
                     test_msg_err_c,
                 ]
             )
+            mock_redis.ping = async_mock.CoroutineMock()
             mock_redis.rpush = async_mock.CoroutineMock()
             mock_redis.zadd = async_mock.CoroutineMock(
                 side_effect=[test_module.RedisError, None, None]
