@@ -432,25 +432,16 @@ class TestRedisHandler(AsyncTestCase):
             sentinel = PropertyMock(return_value=True)
             Deliverer.running = sentinel
             service = Deliverer("test", "test_topic", "test_retry_topic")
-            mock_redis = async_mock.MagicMock(ping=async_mock.CoroutineMock())
+            mock_redis = async_mock.MagicMock()
             service.redis = mock_redis
             service.running = True
             assert await service.is_running()
             sentinel = PropertyMock(return_value=False)
             Deliverer.running = sentinel
             service = Deliverer("test", "test_topic", "test_retry_topic")
-            mock_redis = async_mock.MagicMock(ping=async_mock.CoroutineMock())
+            mock_redis = async_mock.MagicMock()
             service.redis = mock_redis
             service.running = False
-            assert not await service.is_running()
-            sentinel = PropertyMock(return_value=True)
-            Deliverer.running = sentinel
-            service = Deliverer("test", "test_topic", "test_retry_topic")
-            mock_redis = async_mock.MagicMock(
-                ping=async_mock.CoroutineMock(side_effect=redis.exceptions.RedisError)
-            )
-            service.redis = mock_redis
-            service.running = True
             assert not await service.is_running()
 
     def test_init(self):

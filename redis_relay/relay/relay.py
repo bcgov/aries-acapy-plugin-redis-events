@@ -48,12 +48,9 @@ class Relay:
 
     async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
-        try:
-            if self.running:
-                return True
-            else:
-                return False
-        except (RedisError, RedisClusterException):
+        if self.running:
+            return True
+        else:
             return False
 
     async def stop(self) -> None:
