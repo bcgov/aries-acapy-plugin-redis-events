@@ -48,9 +48,13 @@ class Relay:
 
     async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
-        if self.running:
-            return True
-        else:
+        try:
+            await self.redis.ping(target_nodes=RedisCluster.PRIMARIES)
+            if self.running:
+                return True
+            else:
+                return False
+        except (RedisError, RedisClusterException):
             return False
 
     async def stop(self) -> None:
@@ -71,7 +75,7 @@ class Relay:
                     await asyncio.sleep(1)
                     logging.exception(f"Unexpected redis client exception: {err}")
             if not msg:
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.2)
                 continue
             msg = json.loads(msg[1].decode("utf8"))
             if not isinstance(msg, dict):

@@ -484,7 +484,7 @@ class TestRedisHTTPHandler(AsyncTestCase):
             service = HttpRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
-            mock_redis = async_mock.MagicMock()
+            mock_redis = async_mock.MagicMock(ping=async_mock.CoroutineMock())
             service.redis = mock_redis
             service.running = True
             assert await service.is_running()
@@ -493,9 +493,20 @@ class TestRedisHTTPHandler(AsyncTestCase):
             service = HttpRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
-            mock_redis = async_mock.MagicMock()
+            mock_redis = async_mock.MagicMock(ping=async_mock.CoroutineMock())
             service.redis = mock_redis
             service.running = False
+            assert not await service.is_running()
+            sentinel = PropertyMock(return_value=True)
+            HttpRelay.running = sentinel
+            service = HttpRelay(
+                "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
+            )
+            mock_redis = async_mock.MagicMock(
+                ping=async_mock.CoroutineMock(side_effect=redis.exceptions.RedisError)
+            )
+            service.redis = mock_redis
+            service.running = True
             assert not await service.is_running()
 
 
@@ -1268,7 +1279,7 @@ class TestRedisWSHandler(AsyncTestCase):
             service = WSRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
-            mock_redis = async_mock.MagicMock()
+            mock_redis = async_mock.MagicMock(ping=async_mock.CoroutineMock())
             service.redis = mock_redis
             service.running = True
             assert await service.is_running()
@@ -1277,9 +1288,20 @@ class TestRedisWSHandler(AsyncTestCase):
             service = WSRelay(
                 "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
             )
-            mock_redis = async_mock.MagicMock()
+            mock_redis = async_mock.MagicMock(ping=async_mock.CoroutineMock())
             service.redis = mock_redis
             service.running = False
+            assert not await service.is_running()
+            sentinel = PropertyMock(return_value=True)
+            WSRelay.running = sentinel
+            service = WSRelay(
+                "test", "test", "8080", "direct_resp_topic", "inbound_msg_topic"
+            )
+            mock_redis = async_mock.MagicMock(
+                ping=async_mock.CoroutineMock(side_effect=redis.exceptions.RedisError)
+            )
+            service.redis = mock_redis
+            service.running = True
             assert not await service.is_running()
 
     def test_b64_to_bytes(self):

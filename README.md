@@ -21,6 +21,7 @@
 └───docker
 |
 ```
+This plugin provides mechansim to persists both inbound and outbound messages, deliver messages and webhooks, and dispatch events. For receiving inbound messages, you have an option to either setup a mediator or a relay [supports [direct response](https://github.com/hyperledger/aries-rfcs/tree/main/features/0092-transport-return-route#aries-rfc-0092-transports-return-route)]. <br/><br/>The `demo` directory contains a working example/template for both: <br/>`docker-compose.yml` for `mediation` <br/>and `docker-compose.relay.yml` for `relay`<br/><br/> The `deliverer` service dispatches the outbound messages and webhooks. For the `events`, the payload is pushed to the relevant Redis LIST [for the topic name, refer to [event.event_topic_maps](#plugin-configuration)] and further action is delegated to the controllers.
 
 ## Documentation
 #### Design
@@ -30,7 +31,7 @@ Covered in ./redis_queue/README.md
 Covered in ./demo/README.md
 
 #### Docker
-Covered in ./docker.README.md
+Covered in ./docker/README.md
 
 ## Installation and Usage
 
@@ -105,8 +106,22 @@ redis_queue:
 Once the plugin config is filled up. It is possible to deploy the plugin inside ACA-Py.
 ```shell
 $ aca-py start \
-    --plugin redis_queue \
+    --plugin redis_queue.v1_0.events \
     --plugin-config plugins-config.yaml \
     -it redis_queue.v1_0.inbound redis 0 -oq redis_queue.v1_0.outbound
     # ... the remainder of your startup arguments
+```
+
+## Status Endpoints
+`Relay` and `Deliverer` service have the following service endpoints available:
+- `GET` &emsp; `http://{STATUS_ENDPOINT_HOST}:{STATUS_ENDPOINT_PORT}/status/ready`
+- `GET` &emsp; `http://{STATUS_ENDPOINT_HOST}:{STATUS_ENDPOINT_PORT}/status/live`
+
+The configuration for the endpoint service can be provided as following for `relay` and `deliverer`. The API KEY should be provided in the header with `access_token` as key name.
+
+```
+environment:
+    - STATUS_ENDPOINT_HOST=0.0.0.0
+    - STATUS_ENDPOINT_PORT=7001
+    - STATUS_ENDPOINT_API_KEY=test_api_key_1
 ```

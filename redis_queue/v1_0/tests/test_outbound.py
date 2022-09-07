@@ -159,6 +159,7 @@ class TestRedisOutbound(AsyncTestCase):
                     b"test_recip_key_c",
                 ]
             ),
+            ping=async_mock.CoroutineMock(),
         )
         assert (
             await test_util.get_new_valid_uid(redis, to_ignore_uid=b"test_recip_key_b")
@@ -173,6 +174,7 @@ class TestRedisOutbound(AsyncTestCase):
                     b"test_recip_key_c",
                 ]
             ),
+            ping=async_mock.CoroutineMock(),
         )
         assert (
             await test_util.get_new_valid_uid(redis, to_ignore_uid=b"test_recip_key_b")
@@ -190,6 +192,7 @@ class TestRedisOutbound(AsyncTestCase):
                     ],
                 ]
             ),
+            ping=async_mock.CoroutineMock(),
         )
         with async_mock.patch.object(
             test_util.asyncio, "sleep", async_mock.CoroutineMock()

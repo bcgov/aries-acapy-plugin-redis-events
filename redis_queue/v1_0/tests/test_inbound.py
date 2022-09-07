@@ -133,6 +133,7 @@ class TestRedisInbound(AsyncTestCase):
             "from_url",
             async_mock.MagicMock(),
         ) as mock_redis:
+            mock_redis = async_mock.MagicMock(ping=async_mock.CoroutineMock())
             redis_inbound_inst = RedisInboundTransport(
                 "0.0.0.0",
                 self.port,
@@ -165,7 +166,6 @@ class TestRedisInbound(AsyncTestCase):
                 ping=async_mock.CoroutineMock(),
                 hget=async_mock.CoroutineMock(
                     side_effect=[
-                        None,
                         base64.urlsafe_b64encode(
                             json.dumps(
                                 [
@@ -179,7 +179,6 @@ class TestRedisInbound(AsyncTestCase):
                         b"1",
                         b"2",
                         b"1",
-                        None,
                         base64.urlsafe_b64encode(
                             json.dumps(
                                 [
@@ -195,17 +194,17 @@ class TestRedisInbound(AsyncTestCase):
                         b"1",
                         b"2",
                         b"3",
+                        None,
                     ]
                 ),
                 blpop=async_mock.CoroutineMock(
                     side_effect=[
-                        None,
                         (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
                         (None, TEST_INBOUND_MSG_A),
                         (None, TEST_INBOUND_MSG_B),
-                        (None, TEST_INBOUND_MSG_C),
                         (None, TEST_INBOUND_INVALID),
                         (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
+                        None,
                         (None, TEST_INBOUND_MSG_B),
                         (None, TEST_INBOUND_MSG_C),
                         (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
@@ -269,6 +268,7 @@ class TestRedisInbound(AsyncTestCase):
                                 [
                                     "test_recip_key_1",
                                     "test_recip_key_2",
+                                    "test_recip_key_3",
                                 ]
                             ).encode("utf-8")
                         ).decode(),
@@ -277,6 +277,7 @@ class TestRedisInbound(AsyncTestCase):
                 ),
                 blpop=async_mock.CoroutineMock(
                     side_effect=[
+                        (None, b'{"test": "test"}'),
                         (None, TEST_INBOUND_MSG_DIRECT_RESPONSE),
                         redis.exceptions.RedisError,
                         redis.exceptions.RedisError,

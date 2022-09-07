@@ -53,6 +53,7 @@ class Deliverer:
     async def is_running(self) -> bool:
         """Check if delivery service agent is running properly."""
         try:
+            await self.redis.ping(target_nodes=RedisCluster.PRIMARIES)
             if self.running:
                 return True
             else:
@@ -76,7 +77,7 @@ class Deliverer:
                             f"Unexpected redis client exception (blpop): {err}"
                         )
                 if not msg:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.2)
                     continue
                 msg = OutboundPayload.from_bytes(msg[1])
                 headers = msg.headers

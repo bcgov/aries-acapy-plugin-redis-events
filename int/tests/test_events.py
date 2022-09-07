@@ -63,24 +63,15 @@ async def test_outbound_queue(backchannel: Client, connection_id: str, redis):
         json_body=SendMessage(content="test"),
     )
     msg_received = False
-    retry_action = False
     retry_pop_count = 0
     while not msg_received:
-        try:
-            msg = await redis.blpop("acapy_outbound", 0.2)
-            if msg:
-                msg_received = True
-                retry_pop_count = 0
-            else:
-                retry_action = True
-        except (RedisError, RedisClusterException):
-            retry_action = True
-        if retry_action:
-            await asyncio.sleep(1)
+        msg = await redis.blpop("acapy_outbound", 10)
+        if not msg:
+            if retry_pop_count > 3:
+                raise Exception("blpop call failed to retrieve message")
             retry_pop_count = retry_pop_count + 1
-        if retry_pop_count > 10:
-            raise Exception("blpop call failed to retrieve message")
-    assert msg
+            await asyncio.sleep(1)
+        msg_received = True
 
 
 @pytest.mark.asyncio
@@ -126,21 +117,12 @@ async def test_deliverer_retry_on_failure(
         json_body=SendMessage(content="test2"),
     )
     msg_received = False
-    retry_action = False
     retry_pop_count = 0
     while not msg_received:
-        try:
-            msg = await redis.blpop("acapy_outbound", 0.2)
-            if msg:
-                msg_received = True
-                retry_pop_count = 0
-            else:
-                retry_action = True
-        except (RedisError, RedisClusterException):
-            retry_action = True
-        if retry_action:
-            await asyncio.sleep(1)
+        msg = await redis.blpop("acapy_outbound", 10)
+        if not msg:
+            if retry_pop_count > 3:
+                raise Exception("blpop call failed to retrieve message")
             retry_pop_count = retry_pop_count + 1
-        if retry_pop_count > 10:
-            raise Exception("blpop call failed to retrieve message")
-    assert msg
+            await asyncio.sleep(1)
+        msg_received = True

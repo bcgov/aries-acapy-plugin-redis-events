@@ -45,6 +45,7 @@ async def redis_setup(profile: Profile, event: Event) -> RedisCluster:
     connection_url = (get_config(profile.settings).connection).connection_url
     try:
         redis = RedisCluster.from_url(url=connection_url)
+        await redis.ping(target_nodes=RedisCluster.PRIMARIES)
         profile.context.injector.bind_instance(RedisCluster, redis)
     except (RedisError, RedisClusterException) as err:
         raise TransportError(f"No Redis instance setup, {err}")
@@ -71,7 +72,7 @@ def process_event_payload(event_payload: Any):
     processed_event_payload = None
     if isinstance(event_payload, dict):
         processed_event_payload = event_payload
-    elif isinstance(event_payload, str):
+    else:
         processed_event_payload = json.loads(event_payload)
     return processed_event_payload
 
@@ -84,12 +85,16 @@ async def handle_event(profile: Profile, event: EventWithMetadata):
 
     LOGGER.info("Handling event: %s", event)
     wallet_id = cast(Optional[str], profile.settings.get("wallet.id"))
-    event_payload = process_event_payload(event.payload)
-    if not event_payload:
+    try:
+        event_payload = process_event_payload(event.payload)
+    except TypeError:
         try:
             event_payload = event.payload.serialize()
         except AttributeError:
-            event_payload = process_event_payload(event.payload.payload)
+            try:
+                event_payload = process_event_payload(event.payload.payload)
+            except TypeError:
+                event_payload = process_event_payload(event.payload.enc_payload)
     payload = {
         "wallet_id": wallet_id or "base",
         "state": event_payload.get("state"),
@@ -101,8 +106,8 @@ async def handle_event(profile: Profile, event: EventWithMetadata):
     try:
         config_events = get_config(profile.settings).event or EventConfig.default()
         template = config_events.event_topic_maps[event.metadata.pattern.pattern]
-        kafka_topic = Template(template).substitute(**payload)
-        LOGGER.info(f"Sending message {payload} with Kafka topic {kafka_topic}")
+        redis_topic = Template(template).substitute(**payload)
+        LOGGER.info(f"Sending message {payload} with topic {redis_topic}")
         outbound = str.encode(
             json.dumps(
                 {
@@ -112,7 +117,7 @@ async def handle_event(profile: Profile, event: EventWithMetadata):
             ),
         )
         await redis.rpush(
-            kafka_topic,
+            redis_topic,
             outbound,
         )
         # Deliver/dispatch events to webhook_urls directly
