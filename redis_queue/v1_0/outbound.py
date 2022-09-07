@@ -55,6 +55,7 @@ class RedisOutboundQueue(BaseOutboundTransport):
 
     async def start(self):
         """Start the queue."""
+        await self.redis.ping(target_nodes=RedisCluster.PRIMARIES)
 
     async def stop(self):
         """Stop the queue."""

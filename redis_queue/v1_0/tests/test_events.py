@@ -150,7 +150,48 @@ class TestRedisEvents(AsyncTestCase):
                 connection_id="503a4f71-89f1-4bb2-b20d-e74c685ba325",
                 enc_payload=None,
                 endpoint=None,
-                payload='{"@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message", "@id": "99bf771c-93e4-4482-8ab9-45080927f67c", "content": "test", "sent_time": "2022-09-01T20:15:23.719131Z"}',
+                payload="""
+                    {"@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message", "@id": 
+                    "99bf771c-93e4-4482-8ab9-45080927f67c", "content": "test", "sent_time": 
+                    "2022-09-01T20:15:23.719131Z"}
+                """,
+                reply_session_id=None,
+                reply_thread_id="99bf771c-93e4-4482-8ab9-45080927f67c",
+                reply_to_verkey=None,
+                reply_from_verkey=None,
+                target=None,
+                target_list=[
+                    ConnectionTarget(
+                        did="6tb9bVM3SzFRMRxoWJTvp1",
+                        endpoint="http://echo:3002",
+                        label="test-runner",
+                        recipient_keys=["4DBJ4Zp851gjzNtJmmoE97WqVrWN36yZRaGif4AGrxwQ"],
+                        routing_keys=[],
+                        sender_key="4DBJ4Zp851gjzNtJmmoE97WqVrWN36yZRaGif4AGrxwQ",
+                    )
+                ],
+                to_session_only=False,
+            ),
+            metadata=async_mock.MagicMock(
+                pattern=async_mock.MagicMock(
+                    pattern="acapy::outbound-message::queued_for_delivery"
+                )
+            ),
+        )
+        await handle_event(self.profile, real_event_with_metadata)
+        real_event_with_metadata = EventWithMetadata(
+            topic="acapy::outbound-message::queued_for_delivery",
+            payload=OutboundMessage(
+                connection_id="503a4f71-89f1-4bb2-b20d-e74c685ba325",
+                enc_payload="""
+                    {"@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/basicmessage/1.0/message", "@id": 
+                    "99bf771c-93e4-4482-8ab9-45080927f67c", "content": "test", "sent_time": 
+                    "2022-09-01T20:15:23.719131Z"}
+                """.encode(
+                    "utf-8"
+                ),
+                endpoint=None,
+                payload=None,
                 reply_session_id=None,
                 reply_thread_id="99bf771c-93e4-4482-8ab9-45080927f67c",
                 reply_to_verkey=None,

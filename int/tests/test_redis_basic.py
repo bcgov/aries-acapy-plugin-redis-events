@@ -1,4 +1,4 @@
-"""Testing basic kafka stuff."""
+"""Testing basic redis stuff."""
 import pytest
 
 

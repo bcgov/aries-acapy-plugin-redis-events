@@ -80,7 +80,8 @@ async def get_new_valid_uid(redis: RedisCluster, to_ignore_uid: bytes = None):
                 pass
         if len(uid_list) == 0:
             LOGGER.error("No plugin instance available for assignment")
-            await asyncio.sleep(15)
+            await redis.ping(target_nodes=RedisCluster.PRIMARIES)
+            await asyncio.sleep(3)
             continue
         try:
             new_uid = uid_list[next_iter]
@@ -108,7 +109,6 @@ async def assign_recip_key_to_new_uid(redis: RedisCluster, recip_key: str):
             json.dumps(list(recip_keys_set)).encode("utf-8")
         ).decode()
         await redis.hset("uid_recip_keys_map", new_uid, new_recip_keys_set)
-    await redis.hset("recip_key_uid_map", recip_key_encoded, new_uid)
     uid_recip_key = f"{new_uid.decode()}_{recip_key}".encode("utf-8")
     await redis.hset("uid_recip_key_pending_msg_count", uid_recip_key, 0)
     return new_uid

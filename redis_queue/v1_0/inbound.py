@@ -20,9 +20,7 @@ from redis.asyncio import RedisCluster
 from redis.exceptions import RedisError, RedisClusterException
 
 from .utils import (
-    str_to_datetime,
     curr_datetime_to_str,
-    get_timedelta_seconds,
     b64_to_bytes,
 )
 
@@ -64,6 +62,7 @@ class RedisInboundTransport(BaseInboundTransport):
             self.redis = RedisCluster.from_url(url=self.connection_url)
 
     async def start(self):
+        await self.redis.ping(target_nodes=RedisCluster.PRIMARIES)
         plugin_uid = str(uuid4()).encode("utf-8")
         new_recip_keys_set = base64.urlsafe_b64encode(
             json.dumps([]).encode("utf-8")
@@ -93,28 +92,22 @@ class RedisInboundTransport(BaseInboundTransport):
                 continue
             for recip_key in inbound_msg_keys_set:
                 msg_received = False
-                retry_action = False
                 retry_pop_count = 0
                 while not msg_received:
                     try:
                         msg = await self.redis.blpop(
                             f"{self.inbound_topic}_{recip_key}", 0.2
                         )
-                        if msg:
-                            msg_received = True
-                            retry_pop_count = 0
-                        else:
-                            retry_action = True
+                        msg_received = True
+                        retry_pop_count = 0
                     except (RedisError, RedisClusterException) as err:
-                        retry_action = True
-                        redis_error = err
-                    if retry_action:
                         await asyncio.sleep(1)
                         retry_pop_count = retry_pop_count + 1
-                    if retry_pop_count > 5:
-                        raise InboundTransportError(
-                            f"Unexpected exception: {redis_error}"
-                        )
+                        if retry_pop_count > 5:
+                            raise InboundTransportError(f"Unexpected exception: {err}")
+                if not msg:
+                    await asyncio.sleep(0.2)
+                    continue
                 msg_bytes = msg[1]
                 try:
                     inbound = json.loads(msg_bytes)

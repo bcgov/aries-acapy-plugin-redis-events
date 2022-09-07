@@ -42,6 +42,21 @@ Requirements:
 - Docker
 - Docker Compose
 
+For redis-ui GUI viewer, in `setup/p3x-redis-ui-settings/.p3xrs-conns.json` replace `"host": "{your_ipv4_address}"` with your local ipv4 address. This config is designed to work with redis cluster as setup inside `docker-compose.yml`, `docker-compose.relay.yml` and `redis.conf` files. Adjustments will be required in case these files are changed.
+
+Both `Relay` and `Deliverer` service have the following service endpoints available:
+- `GET` &emsp; `http://{STATUS_ENDPOINT_HOST}:{STATUS_ENDPOINT_PORT}/status/ready`
+- `GET` &emsp; `http://{STATUS_ENDPOINT_HOST}:{STATUS_ENDPOINT_PORT}/status/live`
+
+The configuration for the endpoint service can be provided as following for `relay` and `deliverer`. The API KEY should be provided in the header with `access_token` as key name.
+
+```
+environment:
+    - STATUS_ENDPOINT_HOST=0.0.0.0
+    - STATUS_ENDPOINT_PORT=7001
+    - STATUS_ENDPOINT_API_KEY=test_api_key_1
+```
+
 #### Mediator as bridge
 
 Run the following from the `demo` directory:

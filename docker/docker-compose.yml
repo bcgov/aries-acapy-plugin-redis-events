@@ -108,7 +108,7 @@ services:
       - "3001:3001"
     depends_on:
       - redis-node-3:6379
-    command: start --arg-file default.yml --plugin redis_queue -e http://acapy-redis-queue:3000 --plugin-config plugins-config.yml --log-level debug
+    command: start --arg-file default.yml --plugin redis_queue.v1_0.events -e http://acapy-redis-queue:3000 --plugin-config plugins-config.yml --log-level debug
     networks:
       - acapy_default
 networks:
