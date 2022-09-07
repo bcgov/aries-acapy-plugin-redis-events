@@ -1,5 +1,6 @@
-# ACA-PY Redis Queue Plugin
-
+# ACA-PY Redis Queue Plugin [![Lifecycle:Maturing](https://img.shields.io/badge/Lifecycle-Maturing-007EC6)](<Redirect-URL>)
+[![Code Quality Check](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/code-quality-check.yml/badge.svg)](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/code-quality-check.yml)
+[![Tests](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/tests.yml/badge.svg)](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/tests.yml)
 ```
 │    
 │
@@ -108,7 +109,7 @@ Once the plugin config is filled up. It is possible to deploy the plugin inside 
 $ aca-py start \
     --plugin redis_queue.v1_0.events \
     --plugin-config plugins-config.yaml \
-    -it redis_queue.v1_0.inbound redis 0 -oq redis_queue.v1_0.outbound
+    -it redis_queue.v1_0.inbound redis 0 -ot redis_queue.v1_0.outbound
     # ... the remainder of your startup arguments
 ```
 
