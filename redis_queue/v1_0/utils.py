@@ -73,7 +73,7 @@ async def get_new_valid_uid(redis: RedisCluster, to_ignore_uid: bytes = None):
             await redis.set("round_robin_iterator", 0)
         next_iter = int((await redis.get("round_robin_iterator")).decode())
         uid_list = await redis.hkeys("uid_recip_keys_map")
-        if to_ignore_uid:
+        if to_ignore_uid and len(uid_list) > 1:
             try:
                 uid_list.remove(to_ignore_uid)
             except (KeyError, ValueError):
