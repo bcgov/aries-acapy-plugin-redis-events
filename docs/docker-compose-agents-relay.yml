@@ -1,0 +1,291 @@
+######################################
+# For Aries Loadgenerator            #
+# /setup/agents                      #
+######################################
+version: "3.7"
+services:
+
+  issuer-verifier-acapy:
+    image: ${ACAPY_IMAGE}
+    entrypoint: /bin/bash
+    command: [
+        "-c",
+        "sleep 10;
+        pip install git+https://github.com/bcgov/aries-acapy-plugin-redis-events.git;
+        aca-py start \
+        --auto-provision
+        --admin 0.0.0.0 10000 \
+        --inbound-transport redis_queue.v1_0.inbound redis 0 \
+        --outbound-transport redis_queue.v1_0.outbound \
+        --endpoint http://issuer-verifier-nginx:10001 \
+        --genesis-url ${LEDGER_GENESIS} \
+        --ledger-pool-name ${LEDGER_POOL_NAME} \
+        --invite-base-url didcomm://aries_connection_invitation \
+        ${MULTITENANCY_SETTINGS} \
+        --admin-insecure-mode \
+        --label issuer_verifier_acapy \
+        --wallet-type ${WALLET_TYPE} \
+        --wallet-name ${POSTGRES_DB} \
+        --wallet-key key \
+        --wallet-storage-type postgres_storage \
+        --wallet-storage-config '{\"url\":\"host.docker.internal:5432\",\"max_connections\":${MAX_WALLET_CONNECTIONS_PER_ACAPY}}' \
+        --wallet-storage-creds '{\"account\":\"${POSTGRES_USER}\",\"password\":\"${POSTGRES_PASSWORD}\",\"admin_account\":\"${POSTGRES_USER}\",\"admin_password\":\"${POSTGRES_PASSWORD}\"}' \
+        --auto-ping-connection \
+        --auto-verify-presentation \
+        --invite-public \
+        --public-invites \
+        --invite-multi-use \
+        --tails-server-base-url ${ACAPY_TAILS_SERVER_BASE_URL} \
+        --seed ${ISSUER_DID_SEED} \
+        --log-level ${ACAPY_LOG_LEVEL} \
+        --webhook-url ${LOAD_GENERATOR_WEBHOOK_ENDPOINT} \
+        --plugin redis_queue.v1_0.events
+        --plugin-config ./redis-config/plugins-config.yaml
+        ${ACAPY_DEBUG_OPTIONS}"
+    ]
+    networks:
+      - aries-load-test
+    depends_on:
+      - relay
+      - deliverer
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "5"
+        max-size: "50m"
+    restart: always
+
+  issuer-verifier-nginx:
+    container_name: issuer-verifier-nginx
+    image: nginx:latest
+    volumes:
+      - ./nginx-issuer-verifier-${NUMBER_OF_ISSUER_VERIFIER_ACAPY_INSTANCES}.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - issuer-verifier-acapy
+    ports:
+      - 10000:10000
+    networks:
+      - aries-load-test
+
+  holder-acapy:
+    image: ${ACAPY_IMAGE}
+    entrypoint: /bin/bash
+    command: [
+        "-c",
+        "sleep 10;
+        export IP=`ifconfig eth0 | grep 'inet ' | awk '{print $$2}'`;
+        echo $$IP;
+        aca-py start \
+        --auto-provision \
+        --inbound-transport http 0.0.0.0 10011 \
+        --outbound-transport http \
+        --admin 0.0.0.0 10010 \
+        --endpoint http://$$IP:10011 \
+        --genesis-url ${LEDGER_GENESIS} \
+        --ledger-pool-name $LEDGER_POOL_NAME \
+        --ledger-pool-name ${LEDGER_POOL_NAME} \
+        --admin-insecure-mode \
+        --label holder_acapy \
+        --wallet-type ${WALLET_TYPE} \
+        --wallet-name wallet_db \
+        --wallet-key key \
+        --wallet-storage-type default \
+        --auto-accept-invites \
+        --invite-public \
+        --public-invites \
+        --auto-accept-requests \
+        --auto-ping-connection \
+        --auto-respond-credential-offer \
+        --auto-respond-credential-proposal \
+        --auto-respond-credential-request \
+        --auto-respond-messages \
+        --auto-store-credential \
+        --auto-respond-presentation-request \
+        --auto-respond-presentation-proposal \
+        --auto-verify-presentation \
+        --log-level ${ACAPY_LOG_LEVEL} \
+        ${ACAPY_DEBUG_OPTIONS}"
+    ]
+    depends_on:
+      - tails-server
+    networks:
+      - aries-load-test
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "5"
+        max-size: "50m"
+    restart: always
+  
+  redis-cluster:
+    image: redis:latest
+    container_name: cluster
+    command: redis-cli --cluster create 172.28.0.101:6377 172.28.0.102:6378 172.28.0.103:6379 172.28.0.104:6380 172.28.0.105:6381 172.28.0.106:6382 --cluster-replicas 1 --cluster-yes
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    networks:
+      aries-load-test:
+        ipv4_address: 172.28.0.107
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+  redis-node-1:
+    image: redis:latest
+    container_name: node1
+    command: [ "redis-server", "/conf/redis.conf", "--port 6377" ]
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    ports:
+      - 6377:6377
+    volumes:
+      - ./redis-config/redis.conf:/conf/redis.conf
+    networks:
+      aries-load-test:
+        ipv4_address: 172.28.0.101
+  redis-node-2:
+    image: redis:latest
+    container_name: node2
+    command: [ "redis-server", "/conf/redis.conf", "--port 6378" ]
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    ports:
+      - 6378:6378
+    volumes:
+      - ./redis.conf:/conf/redis.conf
+    networks:
+      aries-load-test:
+        ipv4_address: 172.28.0.102
+  redis-node-3:
+    image: redis:latest
+    container_name: node3
+    command: [ "redis-server", "/conf/redis.conf", "--port 6379" ]
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    ports:
+      - 6379:6379
+    volumes:
+      - ./redis-config/redis.conf:/conf/redis.conf
+    networks:
+      aries-load-test:
+        ipv4_address: 172.28.0.103
+  redis-node-4:
+    image: redis:latest
+    container_name: node4
+    command: [ "redis-server", "/conf/redis.conf", "--port 6380" ]
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    ports:
+      - 6380:6380
+    volumes:
+      - ./redis-config/redis.conf:/conf/redis.conf
+    networks:
+      aries-load-test:
+        ipv4_address: 172.28.0.104
+  redis-node-5:
+    image: redis:latest
+    container_name: node5
+    command: [ "redis-server", "/conf/redis.conf", "--port 6381" ]
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    ports:
+      - 6381:6381
+    volumes:
+      - ./redis-config/redis.conf:/conf/redis.conf
+    networks:
+      aries-load-test:
+        ipv4_address: 172.28.0.105
+  redis-node-6:
+    image: redis:latest
+    container_name: node6
+    command: [ "redis-server", "/conf/redis.conf", "--port 6382" ]
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    ports:
+      - 6382:6382
+    volumes:
+      - ./redis-config/redis.conf:/conf/redis.conf
+    networks:
+      aries-load-test:
+        ipv4_address: 172.28.0.106
+
+  relay:
+    image: redis-relay
+    build:
+      context: ./redis-queue
+      dockerfile: redis_relay/Dockerfile
+    ports:
+      - 7001:7001
+    environment:
+      - REDIS_SERVER_URL=redis://default:test1234@172.28.0.103:6379
+      - TOPIC_PREFIX=acapy
+      - STATUS_ENDPOINT_HOST=0.0.0.0
+      - STATUS_ENDPOINT_PORT=7001
+      - STATUS_ENDPOINT_API_KEY=test_api_key_1
+      - INBOUND_TRANSPORT_CONFIG=[["http", "0.0.0.0", "10001"]]
+      - WAIT_BEFORE_HOSTS=15
+      - WAIT_HOSTS=redis-node-3:6379
+      - WAIT_HOSTS_TIMEOUT=120
+      - WAIT_SLEEP_INTERVAL=1
+      - WAIT_HOST_CONNECT_TIMEOUT=60
+    depends_on:
+      - redis-cluster
+    networks:
+      - aries-load-test
+
+  deliverer:
+    image: redis-deliverer
+    build:
+      context: ./redis-queue
+      dockerfile: redis_deliverer/Dockerfile
+    ports:
+      - 7002:7002
+    environment:
+      - REDIS_SERVER_URL=redis://default:test1234@172.28.0.103:6379
+      - TOPIC_PREFIX=acapy
+      - STATUS_ENDPOINT_HOST=0.0.0.0
+      - STATUS_ENDPOINT_PORT=7002
+      - STATUS_ENDPOINT_API_KEY=test_api_key_2
+      - WAIT_BEFORE_HOSTS=15
+      - WAIT_HOSTS=redis-node-3:6379
+      - WAIT_HOSTS_TIMEOUT=120
+      - WAIT_SLEEP_INTERVAL=1
+      - WAIT_HOST_CONNECT_TIMEOUT=60
+    depends_on:
+      - redis-cluster
+    networks:
+      - aries-load-test
+
+  tails-server:
+    container_name: tails-server
+    build:
+      context: ./indy-tails-server
+      dockerfile: docker/Dockerfile.tails-server
+    command: >
+      tails-server
+        --host 0.0.0.0
+        --port 6543
+        --storage-path /tmp/tails-files
+        --log-level INFO
+    volumes:
+      - tails-server-volume:/home/indy/tails-files
+    ports:
+      - 6543:6543
+    networks:
+      - aries-load-test
+    restart: always
+
+networks:
+  aries-load-test:
+    external: true
+    name: ${NETWORK_NAME}
+
+volumes:
+  tails-server-volume:
