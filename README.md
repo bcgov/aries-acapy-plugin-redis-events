@@ -22,7 +22,46 @@
 └───docker
 |
 ```
-This plugin provides mechansim to persists both inbound and outbound messages, deliver messages and webhooks, and dispatch events. For receiving inbound messages, you have an option to either setup a mediator or a relay [supports [direct response](https://github.com/hyperledger/aries-rfcs/tree/main/features/0092-transport-return-route#aries-rfc-0092-transports-return-route)]. <br/><br/>The `demo` directory contains a working example/template for both: <br/>`docker-compose.yml` for `mediation` <br/>and `docker-compose.relay.yml` for `relay`<br/><br/> The `deliverer` service dispatches the outbound messages and webhooks. For the `events`, the payload is pushed to the relevant Redis LIST [for the topic name, refer to [event.event_topic_maps](#plugin-configuration)] and further action is delegated to the controllers.
+
+This plugin provides mechansim to persists both inbound and outbound messages, deliver messages and webhooks, and dispatch events.
+
+For receiving inbound messages, you have an option to either setup a mediator or a relay [supports [direct response](https://github.com/hyperledger/aries-rfcs/tree/main/features/0092-transport-return-route#aries-rfc-0092-transports-return-route)].
+
+For the mediator scenario:
+
+```mermaid
+  flowchart LR;
+      InboundMsg([Inbound Msg])-->Mediator;
+      Mediator-->OutboundQueue[(Outbound Queue)];
+      OutboundQueue-->Deliverer;
+      Deliverer-->YourAgent;
+```
+
+For the relay scenario:
+
+```mermaid
+  flowchart LR;
+      InboundMsg([Inbound Msg])-->Relay;
+      Relay-->InboundQueue[(Inbound Queue)];
+      InboundQueue-->Deliverer;
+      Deliverer-->YourAgent;
+```
+
+The `demo` directory contains a working example/template for both: 
+
+- `docker-compose.yml` for `mediation`, and
+- `docker-compose.relay.yml` for `relay`
+
+The `deliverer` service dispatches the outbound messages and webhooks. For the `events`, the payload is pushed to the relevant Redis LIST [for the topic name, refer to [event.event_topic_maps](#plugin-configuration)] and further action is delegated to the controllers.
+
+For the outbound scenario:
+
+```mermaid
+  flowchart LR;
+      YourAgent-->OutboundQueue[(Outbound Queue)];
+      OutboundQueue-->Deliverer;
+      Deliverer-->OutboundMsg([Outbound Msg]);
+```
 
 ## Documentation
 #### Design
