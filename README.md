@@ -33,7 +33,7 @@ For the mediator scenario:
   flowchart LR;
       InboundMsg([Inbound Msg])-->Mediator;
       Mediator-->InboundQueue[(Inbound Queue)];
-      InboundQueue-->YourAgent;
+      InboundQueue-->YourAgent{{Your Agent}};
 ```
 
 For the relay scenario:
@@ -42,7 +42,7 @@ For the relay scenario:
   flowchart LR;
       InboundMsg([Inbound Msg])-->Relay;
       Relay-->InboundQueue[(Inbound Queue)];
-      InboundQueue-->YourAgent;
+      InboundQueue-->YourAgent{{Your Agent}};
 ```
 
 The `demo` directory contains a working example/template for both: 
@@ -56,7 +56,7 @@ For the outbound scenario:
 
 ```mermaid
   flowchart LR;
-      YourAgent-->OutboundQueue[(Outbound Queue)];
+      YourAgent{{Your Agent}}-->OutboundQueue[(Outbound Queue)];
       OutboundQueue-->Deliverer;
       Deliverer-->OutboundMsg([Outbound Msg]);
 ```

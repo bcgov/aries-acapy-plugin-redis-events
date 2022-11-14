@@ -73,7 +73,7 @@ This will start up the following:
   flowchart LR;
       InboundMsg([Inbound Msg])-->Mediator;
       Mediator-->InboundQueue[(Inbound Queue)];
-      InboundQueue-->YourAgent;
+      InboundQueue-->YourAgent{{Your Agent}};
       YourAgent-->OutboundQueue[(Outbound Queue)];
       OutboundQueue-->Deliverer;
       Deliverer-->OutboundMsg([Outbound Msg]);
@@ -97,7 +97,7 @@ This will start up the following:
   flowchart LR;
       InboundMsg([Inbound Msg])-->Relay;
       Relay-->InboundQueue[(Inbound Queue)];
-      InboundQueue-->YourAgent;
+      InboundQueue-->YourAgent{{Your Agent}};
       YourAgent-->OutboundQueue[(Outbound Queue)];
       OutboundQueue-->Deliverer;
       Deliverer-->OutboundMsg([Outbound Msg]);
