@@ -69,7 +69,18 @@ This will start up the following:
 - Deliverer service to send outbound message from the `acapy_outbound` queue and deliver them to specified endpoints reliably.
 - An agent [Adison Agency] with `redis_queue.v1_0/outbound` [`acapy_outbound` queue] and `redis_queue.v1_0/inbound`. This agent picks up message from the inbound queue being pushed in by the mediator.
 
+```mermaid
+  flowchart LR;
+      InboundMsg([Inbound Msg])-->Mediator;
+      Mediator-->InboundQueue[(Inbound Queue)];
+      InboundQueue-->YourAgent;
+      YourAgent-->OutboundQueue[(Outbound Queue)];
+      OutboundQueue-->Deliverer;
+      Deliverer-->OutboundMsg([Outbound Msg]);
+```
+
 Admin API will be availble at `http://0.0.0.0:3001` for test and demo purpose.
+
 #### Relay as bridge
 
 Run the following from the `demo` directory:
@@ -81,5 +92,15 @@ This will start up the following:
 - Relay service to receive inbound message [`http` port `80`], extract `recip_key` and push such messages to `acapy_inbound_{recip_key}` queue. Supports both `http` and `ws`.
 - Deliverer service to send outbound message from the `acapy_outbound` queue and deliver them to specified endpoints reliably.
 - An agent [Adison Agency] with `redis_queue.v1_0/outbound` [`acapy_outbound` queue] and `redis_queue.v1_0/inbound`. This agent picks up message from the inbound queue being pushed in by the mediator.
+
+```mermaid
+  flowchart LR;
+      InboundMsg([Inbound Msg])-->Relay;
+      Relay-->InboundQueue[(Inbound Queue)];
+      InboundQueue-->YourAgent;
+      YourAgent-->OutboundQueue[(Outbound Queue)];
+      OutboundQueue-->Deliverer;
+      Deliverer-->OutboundMsg([Outbound Msg]);
+```
 
 Admin API will be availble at `http://0.0.0.0:3001` for test and demo purpose.
