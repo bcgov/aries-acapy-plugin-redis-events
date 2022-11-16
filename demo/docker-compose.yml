@@ -8,6 +8,7 @@ services:
       - ./setup/p3x-redis-ui-settings:/settings
     networks:
       - acapy_default
+
   redis-cluster:
     image: redis:latest
     container_name: cluster
@@ -25,6 +26,7 @@ services:
       - redis-node-5
       - redis-node-6
       - redis-ui
+
   redis-node-1:
     image: redis:latest
     container_name: node1
@@ -38,6 +40,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.101
+
   redis-node-2:
     image: redis:latest
     container_name: node2
@@ -51,6 +54,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.102
+
   redis-node-3:
     image: redis:latest
     container_name: node3
@@ -64,6 +68,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.103
+
   redis-node-4:
     image: redis:latest
     container_name: node4
@@ -77,6 +82,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.104
+
   redis-node-5:
     image: redis:latest
     container_name: node5
@@ -90,6 +96,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.105
+
   redis-node-6:
     image: redis:latest
     container_name: node6
@@ -134,6 +141,8 @@ services:
   mediator-tunnel:
     image: dbluhm/agent-tunnel
     command: -s mediator:3000 -p 4040 -h ${AGENT_TUNNEL_HOST}
+    ports:
+      - 4040:4040
     networks:
       - acapy_default
 
@@ -156,6 +165,7 @@ services:
       - WAIT_SLEEP_INTERVAL=1
       - WAIT_HOST_CONNECT_TIMEOUT=60
       - TUNNEL_ENDPOINT=http://mediator-tunnel:4040
+      - ACAPY_ENDPOINT=${ACAPY_ENDPOINT}
     networks:
       - acapy_default
     entrypoint: /bin/sh -c '/wait && ./acapy-endpoint.sh poetry run aca-py "$$@"' --
@@ -183,11 +193,11 @@ services:
       - WAIT_HOST_CONNECT_TIMEOUT=60
     networks:
       - acapy_default
+
   #*************************************************************
   # setup: Setup connections between agency and mediator. In a *
   # "Juggernaut" fashion!                                      *
   #*************************************************************
-
   setup:
     container_name: juggernaut
     build:
@@ -206,6 +216,7 @@ services:
       - mediator
     networks:
       - acapy_default
+
 networks:
   acapy_default:
     external: true

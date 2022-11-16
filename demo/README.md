@@ -6,10 +6,13 @@ This folder contains configs for multiple scenarios:
 - A single agent with relay as http bridge networked with ngrok to be reachable from the outside world.
 - A single agent setup with a mediator as http bridge networked with ngrok.
 
-## Disclaimer: On the usage of ngrok
+## Disclaimer: On the usage of ngrok/localtunnel
 
-For each of the scenarios listed above, ngrok is used to simplify networking
-between the host and containers. As a result of the toolbox generally running
+For each of the scenarios listed above, [ngrok](https://ngrok.com/) or 
+[localtunnel](https://github.com/localtunnel/localtunnel) is used to simplify networking
+between the host and containers.
+
+As a result of the toolbox generally running
 directly on the host and the containers needing to communicate with each other
 as well as the host, there is not a platform agnostic method of using the same
 endpoint from all perspectives and reaching the intended agent. On Linux, this
@@ -21,17 +24,32 @@ containers are only reachable through ports on `localhost`. In theory, one could
 add aliases to each container on the host machine but this adds setup steps that
 are not easily reversed when the containers are stopped and removed.
 
-To circumvent these complexities, ngrok is used in these demos to provide an
+To circumvent these complexities, ngrok/localtunnel is used in these demos to provide an
 endpoint that is consistently reachable from both the container cohort and the
 host. This also comes with the side benefit of the demo agents being accessible
 to other agents if, for instance, you would like to experiment with agents with
 a peer.
 
-Ngrok is not without limitations. Requests will be throttled after exceeding a
+Ngrok/localtunnel are not without limitations. Requests will be throttled after exceeding a
 certain threshold and endpoints will expire after a set length of time, usually
 on the range of a few hours. This means all connections formed will also expire
 after a few hours. **These setups are for demonstration purposes only and should
 not be used in production.**
+
+If you want to run the demo **without** ngrok/localtunnel (or if you find the demo isn't working with ngrok/localtunnel),
+define an environment variable `ACAPY_ENDPOINT` as follows:
+
+For the *Mediator* scenario:
+
+```bash
+$ ACAPY_ENDPOINT=http://mediator:3000 docker-compose up -d
+```
+
+For the *Relay* scenario:
+
+```bash
+$ ACAPY_ENDPOINT=http://relay:4040 docker-compose -f ./docker-compose.relay.yml up -d
+```
 
 In practice, Aries Cloud Agent - Python is deployed behind typical web
 infrastructure to provide a consistent endpoint.
@@ -39,6 +57,7 @@ infrastructure to provide a consistent endpoint.
 ## Running the Demos
 
 Requirements:
+
 - Docker
 - Docker Compose
 
@@ -57,6 +76,12 @@ environment:
     - STATUS_ENDPOINT_API_KEY=test_api_key_1
 ```
 
+You need to create a local docker network as follows:
+
+```bash
+$ docker network create --subnet=172.28.0.0/24 test_network
+```
+
 #### Mediator as bridge
 
 Run the following from the `demo` directory:
@@ -64,7 +89,21 @@ Run the following from the `demo` directory:
 ```sh
 $ docker-compose up -d
 ```
+
+... or to run without the "tunnel":
+
+```bash
+$ ACAPY_ENDPOINT=http://mediator:3000 docker-compose up -d
+```
+
+To monitor the docker log output:
+
+```bash
+$ docker-compose logs -f
+```
+
 This will start up the following:
+
 - ACA-Py mediator [Edison Mediator] with `redis_queue.v1_0/outbound` setup such that inbound messages are pushed to `acapy_inbound_{recip_key}` queue
 - Deliverer service to send outbound message from the `acapy_outbound` queue and deliver them to specified endpoints reliably.
 - An agent [Adison Agency] with `redis_queue.v1_0/outbound` [`acapy_outbound` queue] and `redis_queue.v1_0/inbound`. This agent picks up message from the inbound queue being pushed in by the mediator.
@@ -88,7 +127,21 @@ Run the following from the `demo` directory:
 ```sh
 $ docker-compose -f ./docker-compose.relay.yml up -d
 ```
+
+... or to run without the "tunnel":
+
+```bash
+$ ACAPY_ENDPOINT=http://relay:4040 docker-compose -f ./docker-compose.relay.yml up -d
+```
+
+To monitor the docker log output:
+
+```bash
+$ docker-compose logs -f
+```
+
 This will start up the following:
+
 - Relay service to receive inbound message [`http` port `80`], extract `recip_key` and push such messages to `acapy_inbound_{recip_key}` queue. Supports both `http` and `ws`.
 - Deliverer service to send outbound message from the `acapy_outbound` queue and deliver them to specified endpoints reliably.
 - An agent [Adison Agency] with `redis_queue.v1_0/outbound` [`acapy_outbound` queue] and `redis_queue.v1_0/inbound`. This agent picks up message from the inbound queue being pushed in by the mediator.

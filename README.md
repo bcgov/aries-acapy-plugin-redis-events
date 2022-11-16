@@ -1,27 +1,6 @@
 # ACA-PY Redis Queue Plugin [![Lifecycle:Maturing](https://img.shields.io/badge/Lifecycle-Maturing-007EC6)](<Redirect-URL>)
 [![Code Quality Check](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/code-quality-check.yml/badge.svg)](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/code-quality-check.yml)
 [![Tests](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/tests.yml/badge.svg)](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/tests.yml)
-```
-│    
-│
-└───redis_deliverer
-│   deliver.py
-└───redis_queue
-│   └───events
-│   inbound
-│   outbound
-│   config
-│   utils
-└───redis_relay
-│   └───relay
-|   |   relay
-└───status_endpoint
-|   status_endpoint
-└───int
-└───demo
-└───docker
-|
-```
 
 This plugin provides mechansim to persists both inbound and outbound messages, deliver messages and webhooks, and dispatch events.
 
@@ -61,32 +40,70 @@ For the outbound scenario:
       Deliverer-->OutboundMsg([Outbound Msg]);
 ```
 
+## Code Structure
+
+The directory structure within this repository is as follows:
+
+```
+│    
+│
+└───redis_deliverer
+│   deliver.py
+└───redis_queue
+│   └───events
+│   inbound
+│   outbound
+│   config
+│   utils
+└───redis_relay
+│   └───relay
+|   |   relay
+└───status_endpoint
+|   status_endpoint
+└───int
+└───demo
+└───docker
+|
+```
+
+The code for the Deliverer and Relay processes are in the `redis_deliverer` and `redis_relay` directories, respectively.  The `status_endpoint` directory contains code for health endpoints that is used by both of these processes.
+
+The `docker` directory contains a dockerfile (and instructions) for running aca-py with the redis plugin.
+
+The `demo` diretory contains example docker-compose files for running aca-py with redis using either of the Relay or Mediator scenarios.
+
 ## Documentation
+
 #### Design
+
 Covered in ./redis_queue/README.md
 
 #### Demo
+
 Covered in ./demo/README.md
 
 #### Docker
+
 Covered in ./docker/README.md
 
 ## Installation and Usage
 
-First, install this plugin into your environment.
+First, install this plugin into your environment:
 
 ```sh
 $ pip install git+https://github.com/bcgov/aries-acapy-plugin-redis-events.git
 ```
 
-When starting up ACA-Py, load the plugin along with any other startup
-parameters.
+When starting up ACA-Py, load the plugin along with any other startup parameters:
 
 ```sh
 $ aca-py start --arg-file my_config.yml --plugin redis_queue.v1_0.events
 ```
 
 ## Plugin configuration
+
+The redis plugin is configured using an external yaml file.  An example yaml configuration is:
+
 ```yaml
 redis_queue:
   connection: 
@@ -130,18 +147,34 @@ redis_queue:
       acapy::keylist::updated: keylist
     deliver_webhook: true
 ```
+
+The configuration parameters in the above example are:
+
+Connection:
+
 - `redis_queue.connection.connection_url`: This is required and is expected in `redis://{username}:{password}@{host}:{port}` format.
+
+Inbound:
+
 - `redis_queue.inbound.acapy_inbound_topic`: This is the topic prefix for the inbound message queues. Recipient key of the message are also included in the complete topic name. The final topic will be in the following format `acapy_inbound_{recip_key}`
 - `redis_queue.inbound.acapy_direct_resp_topic`: Queue topic name for direct responses to inbound message.
+
+Outbound:
+
 - `redis_queue.outbound.acapy_outbound_topic`: Queue topic name for the outbound messages. Used by Deliverer service to deliver the payloads to specified endpoint.
 - `redis_queue.outbound.mediator_mode`: Set to true, if using Redis as a http bridge when setting up a mediator agent. By default, it is set to false.
+
+Events:
+
 - `event.event_topic_maps`: Event topic map
 - `event.event_webhook_topic_maps`: Event to webhook topic map
 - `event.deliver_webhook`: When set to true, this will deliver webhooks to endpoints specified in `admin.webhook_urls`. By default, set to true.
 
 
 ## Plugin deployment
-Once the plugin config is filled up. It is possible to deploy the plugin inside ACA-Py.
+
+Once the plugin config is defined, it is possible to deploy the plugin inside ACA-Py.
+
 ```shell
 $ aca-py start \
     --plugin redis_queue.v1_0.events \
@@ -151,7 +184,9 @@ $ aca-py start \
 ```
 
 ## Status Endpoints
+
 `Relay` and `Deliverer` service have the following service endpoints available:
+
 - `GET` &emsp; `http://{STATUS_ENDPOINT_HOST}:{STATUS_ENDPOINT_PORT}/status/ready`
 - `GET` &emsp; `http://{STATUS_ENDPOINT_HOST}:{STATUS_ENDPOINT_PORT}/status/live`
 

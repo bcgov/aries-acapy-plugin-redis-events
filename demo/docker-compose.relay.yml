@@ -8,6 +8,7 @@ services:
       - ./setup/p3x-redis-ui-settings:/settings
     networks:
       - acapy_default
+
   redis-cluster:
     image: redis:latest
     container_name: cluster
@@ -25,6 +26,7 @@ services:
       - redis-node-5
       - redis-node-6
       - redis-ui
+
   redis-node-1:
     image: redis:latest
     container_name: node1
@@ -38,6 +40,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.101
+
   redis-node-2:
     image: redis:latest
     container_name: node2
@@ -51,6 +54,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.102
+
   redis-node-3:
     image: redis:latest
     container_name: node3
@@ -64,6 +68,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.103
+
   redis-node-4:
     image: redis:latest
     container_name: node4
@@ -77,6 +82,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.104
+
   redis-node-5:
     image: redis:latest
     container_name: node5
@@ -90,6 +96,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.105
+
   redis-node-6:
     image: redis:latest
     container_name: node6
@@ -103,6 +110,7 @@ services:
     networks:
       acapy_default:
         ipv4_address: 172.28.0.106
+
   agency:
     image: acapy-redis-queue
     build:
@@ -124,15 +132,18 @@ services:
       - WAIT_HOSTS_TIMEOUT=120
       - WAIT_SLEEP_INTERVAL=1
       - WAIT_HOST_CONNECT_TIMEOUT=60
+      - ACAPY_ENDPOINT=${ACAPY_ENDPOINT}
     entrypoint: /bin/sh -c '/wait && ./acapy-endpoint.sh poetry run aca-py "$$@"' --
     command: start --arg-file ./configs/agency.yml
     networks:
       - acapy_default
+
   relay-tunnel:
     image: dbluhm/agent-tunnel
     command: -s relay:80 -p 4040 -h ${TUNNEL_HOST}
     networks:
       - acapy_default
+
   relay:
     image: redis-relay
     build:
@@ -159,6 +170,7 @@ services:
       - relay-tunnel
     networks:
       - acapy_default
+
   deliverer:
     image: redis-deliverer
     build:
@@ -181,6 +193,7 @@ services:
       - redis-cluster
     networks:
       - acapy_default
+
 networks:
   acapy_default:
     external: true
