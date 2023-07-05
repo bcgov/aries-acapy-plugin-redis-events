@@ -3,8 +3,8 @@ import base64
 import json
 
 import logging
-from typing import Union
 
+from aries_cloudagent.transport.wire_format import BaseWireFormat
 from aries_cloudagent.core.profile import Profile
 from aries_cloudagent.transport.outbound.base import (
     BaseOutboundTransport,
@@ -34,9 +34,13 @@ class RedisOutboundQueue(BaseOutboundTransport):
     schemes = ("redis",)
     is_external = True
 
-    def __init__(self, root_profile: Profile):
+    def __init__(
+        self,
+        wire_format: BaseWireFormat,
+        root_profile: Profile,
+    ):
         """Initialize base queue type."""
-        super().__init__(root_profile)
+        super().__init__(wire_format, root_profile)
         self.outbound_config = (
             get_config(root_profile.context.settings).outbound
             or OutboundConfig.default()
