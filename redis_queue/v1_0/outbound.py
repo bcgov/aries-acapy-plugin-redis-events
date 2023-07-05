@@ -3,12 +3,13 @@ import base64
 import json
 
 import logging
-from typing import List, Optional, Union
+from typing import Union
 
 from aries_cloudagent.core.profile import Profile
 from aries_cloudagent.transport.outbound.base import (
     BaseOutboundTransport,
     OutboundTransportError,
+    QueuedOutboundMessage,
 )
 from aries_cloudagent.transport.wire_format import (
     DIDCOMM_V0_MIME_TYPE,
@@ -41,7 +42,8 @@ class RedisOutboundQueue(BaseOutboundTransport):
             or OutboundConfig.default()
         )
         LOGGER.info(
-            f"Setting up redis outbound queue with configuration: {self.outbound_config}"
+            "Setting up redis outbound queue with configuration: %s",
+            self.outbound_config,
         )
         self.redis = root_profile.inject_or(RedisCluster)
         self.is_mediator = self.outbound_config.mediator_mode
@@ -63,12 +65,13 @@ class RedisOutboundQueue(BaseOutboundTransport):
     async def handle_message(
         self,
         profile: Profile,
-        payload: Union[str, bytes],
+        outbound_message: QueuedOutboundMessage,
         endpoint: str,
         metadata: dict = None,
         api_key: str = None,
     ):
         """Prepare and send message to external queue."""
+        payload = outbound_message.payload
         if not endpoint:
             raise OutboundTransportError("No endpoint provided")
         headers = metadata or {}
@@ -105,4 +108,4 @@ class RedisOutboundQueue(BaseOutboundTransport):
                 message,
             )
         except (RedisError, RedisClusterException) as err:
-            LOGGER.exception(f"Error while pushing to Redis: {err}")
+            LOGGER.exception("Error while pushing to Redis: %s", err)
