@@ -93,7 +93,7 @@ First, install this plugin into your environment:
 > **Note** Deployments of the main branch of this repository must be used with ACA-Py artifacts created **after** [ACA-Py PR #2170](https://github.com/hyperledger/aries-cloudagent-python/pull/2170)). If you are using an earlier ACA-Py release (e.g., version 0.8.2 and earlier), you **MUST** use the v0.0.1 tag of this repository.
 
 ```sh
-$ pip install git+https://github.com/bcgov/aries-acapy-plugin-redis-events.git
+$ pip install git+https://github.com/bcgov/aries-acapy-plugin-redis-events.git@v0.1.0
 ```
 
 When starting up ACA-Py, load the plugin along with any other startup parameters:
