@@ -5,7 +5,7 @@ description = "ACA-Py Redis HTTP and WS relay"
 authors = ["Shaanjot Gill <gill.shaanjots@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.6.9"
+python = "^3.9"
 redis = "^4.1.4"
 aiohttp = "^3.7.4"
 fastapi = "^0.68.0"
