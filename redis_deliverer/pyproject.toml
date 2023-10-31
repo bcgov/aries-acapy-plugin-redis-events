@@ -6,7 +6,7 @@ authors = ["Shaanjot Gill <gill.shaanjots@gmail.com>"]
 license = "Apache-2.0"
 
 [tool.poetry.dependencies]
-python = "^3.6.9"
+python = "^3.9"
 aiohttp = "^3.7.4"
 redis = "^4.1.4"
 pydantic = "^1.8.2"
