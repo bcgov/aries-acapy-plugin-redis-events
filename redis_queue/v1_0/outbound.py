@@ -36,11 +36,11 @@ class RedisOutboundQueue(BaseOutboundTransport):
 
     def __init__(
         self,
-        wire_format: BaseWireFormat,
         root_profile: Profile,
+        **kwargs,
     ):
         """Initialize base queue type."""
-        super().__init__(wire_format, root_profile)
+        super().__init__(**kwargs)
         self.outbound_config = (
             get_config(root_profile.context.settings).outbound
             or OutboundConfig.default()

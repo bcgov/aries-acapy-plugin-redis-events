@@ -7,6 +7,11 @@ import json
 from aries_cloudagent.core.in_memory import InMemoryProfile
 from aiohttp.test_utils import unused_port
 from asynctest import TestCase as AsyncTestCase, mock as async_mock, PropertyMock
+from aries_cloudagent.transport.outbound.base import (
+    QueuedOutboundMessage,
+    OutboundMessage,
+    ConnectionTarget,
+)
 
 from .. import outbound as test_outbound
 from .. import utils as test_util
@@ -90,9 +95,7 @@ class TestRedisOutbound(AsyncTestCase):
                 ping=async_mock.CoroutineMock(),
             ),
         )
-        redis_outbound_inst = RedisOutboundQueue(
-            root_profile=self.profile,
-        )
+        redis_outbound_inst = RedisOutboundQueue(root_profile=self.profile)
 
         assert redis_outbound_inst
         await redis_outbound_inst.start()
@@ -109,9 +112,7 @@ class TestRedisOutbound(AsyncTestCase):
                 )
             ),
         ) as mock_redis:
-            redis_outbound_inst = RedisOutboundQueue(
-                root_profile=self.profile,
-            )
+            redis_outbound_inst = RedisOutboundQueue(root_profile=self.profile)
 
             assert redis_outbound_inst
             await redis_outbound_inst.start()
@@ -333,10 +334,17 @@ class TestRedisOutbound(AsyncTestCase):
             async_mock.MagicMock(),
         )
         redis_outbound_inst = RedisOutboundQueue(self.profile)
+        q_out_msg = QueuedOutboundMessage(
+            profile=self.profile,
+            message=OutboundMessage(payload="test-message"),
+            target=ConnectionTarget(),
+            transport_id="test-transport-id",
+        )
+        q_out_msg.payload = b'{"test":"test"}'
         with self.assertRaises(test_outbound.OutboundTransportError):
             await redis_outbound_inst.handle_message(
                 self.profile,
-                b"{}",
+                q_out_msg,
                 None,
             )
         self.profile.context.injector.bind_instance(
@@ -348,7 +356,7 @@ class TestRedisOutbound(AsyncTestCase):
         redis_outbound_inst = RedisOutboundQueue(self.profile)
         await redis_outbound_inst.handle_message(
             self.profile,
-            json.dumps({"test": "test"}),
+            q_out_msg,
             "http://0.0.0.0:8000",
         )
 
@@ -371,9 +379,16 @@ class TestRedisOutbound(AsyncTestCase):
             ),
         ):
             redis_outbound_inst = RedisOutboundQueue(self.profile)
+            q_out_msg = QueuedOutboundMessage(
+                profile=self.profile,
+                message=OutboundMessage(payload="test-message"),
+                target=ConnectionTarget(),
+                transport_id="test-transport-id",
+            )
+            q_out_msg.payload = b'{"test":"test"}'
             await redis_outbound_inst.handle_message(
                 self.profile,
-                b'{"test": "test"}',
+                q_out_msg,
                 "http://0.0.0.0:8000",
                 {},
                 "test_api_key",
@@ -407,10 +422,18 @@ class TestRedisOutbound(AsyncTestCase):
                 )
             ),
         ):
-            redis_outbound_inst = RedisOutboundQueue(self.profile)
+            redis_outbound_inst = RedisOutboundQueue(root_profile=self.profile)
+            q_out_msg = QueuedOutboundMessage(
+                profile=self.profile,
+                message=OutboundMessage(payload="test-message"),
+                target=ConnectionTarget(),
+                transport_id="test-transport-id",
+            )
+            q_out_msg.payload = TEST_PAYLOAD_BYTES
+
             await redis_outbound_inst.handle_message(
                 self.profile,
-                TEST_PAYLOAD_BYTES,
+                q_out_msg,
                 "http://0.0.0.0:8000",
                 None,
                 "test_api_key",
