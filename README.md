@@ -1,6 +1,15 @@
-# ACA-PY Redis Queue Plugin [![Lifecycle:Maturing](https://img.shields.io/badge/Lifecycle-Maturing-007EC6)](<Redirect-URL>)
+# ACA-PY Redis Queue Plugin - Has Moved! [![Lifecycle:Moved](https://img.shields.io/badge/Lifecycle-Moved-d45500)](https://github.com/hyperledger/aries-acapy-plugins/tree/main/redis_events)
 [![Code Quality Check](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/code-quality-check.yml/badge.svg)](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/code-quality-check.yml)
 [![Tests](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/tests.yml/badge.svg)](https://github.com/bcgov/aries-acapy-plugin-redis-events/actions/workflows/tests.yml)
+
+## :warning: Move Notice :warning:
+The ACA-PY Redis Queue Plugin has been donated to the Hyperledger Foundation Aries project and has been moved to its new home in the [hyperledger/aries-acapy-plugins](https://github.com/hyperledger/aries-acapy-plugins) repository.  You'll find it in the `redis_events` folder.
+
+We're proud for the code to join the many other code contributions made by the Province of British Columbia to the Hyperledger Foundation.
+
+This repository has been archived and will no longer be maintained.
+
+## About the ACA-PY Redis Queue Plugin
 
 This plugin provides mechansim to persists both inbound and outbound messages, deliver messages and webhooks, and dispatch events.
 
@@ -24,7 +33,7 @@ For the relay scenario:
       InboundQueue-->YourAgent{{Your Agent}};
 ```
 
-The `demo` directory contains a working example/template for both: 
+The `demo` directory contains a working example/template for both:
 
 - `docker-compose.yml` for `mediation`, and
 - `docker-compose.relay.yml` for `relay`
@@ -45,7 +54,7 @@ For the outbound scenario:
 The directory structure within this repository is as follows:
 
 ```
-│    
+│
 │
 └───redis_deliverer
 │   deliver.py
@@ -108,7 +117,7 @@ The redis plugin is configured using an external yaml file.  An example yaml con
 
 ```yaml
 redis_queue:
-  connection: 
+  connection:
     connection_url: "redis://default:test1234@172.28.0.103:6379"
 
   ### For Inbound ###
